@@ -6,6 +6,7 @@ Ten katalog pokazuje schematyczny szkielet daemona dla projektu wieloaplikacyjne
 
 - `daemon/bin/template-daemon.sh` — proces działający w tle, obsługujący protokół poleceń.
 - `frontend/cli/daemonctl.sh` — referencyjny frontend CLI wysyłający polecenia użytkownika.
+- `frontend/tui/parser-tui.sh` — referencyjny frontend TUI z menu operatorskim.
 - `backend/adapter/backend-client.sh` — referencyjny klient backendowy wysyłający zadania systemowe.
 - `config/daemon.conf.example` — przykładowa konfiguracja ścieżek, timeoutów i wersji protokołu.
 - `systemd/parser-template-daemon.service` — przykładowa jednostka systemd.
@@ -49,6 +50,7 @@ W drugim terminalu:
 ```bash
 ./frontend/cli/daemonctl.sh ping
 ./frontend/cli/daemonctl.sh status
+./frontend/tui/parser-tui.sh --once status
 ./frontend/cli/daemonctl.sh frontend.event '{"button":"start"}'
 ./backend/adapter/backend-client.sh '{"task":"sync"}'
 ```

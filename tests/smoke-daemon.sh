@@ -36,6 +36,8 @@ done
 
 DAEMON_CONFIG="$TMP_DIR/daemon.conf" "$PROJECT_ROOT/frontend/cli/daemonctl.sh" ping | grep '"code":"PONG"' >/dev/null
 DAEMON_CONFIG="$TMP_DIR/daemon.conf" "$PROJECT_ROOT/frontend/cli/daemonctl.sh" status | grep '"code":"STATUS"' >/dev/null
+DAEMON_CONFIG="$TMP_DIR/daemon.conf" "$PROJECT_ROOT/frontend/tui/parser-tui.sh" --once status --no-color | grep '"code":"STATUS"' >/dev/null
+DAEMON_CONFIG="$TMP_DIR/daemon.conf" "$PROJECT_ROOT/frontend/tui/parser-tui.sh" --once frontend.event --payload '{"source":"tui-smoke"}' --no-color | grep '"code":"FRONTEND_EVENT"' >/dev/null
 DAEMON_CONFIG="$TMP_DIR/daemon.conf" "$PROJECT_ROOT/backend/adapter/backend-client.sh" '{"task":"smoke"}' | grep '"code":"BACKEND_JOB"' >/dev/null
 DAEMON_CONFIG="$TMP_DIR/daemon.conf" "$PROJECT_ROOT/frontend/cli/daemonctl.sh" shutdown | grep '"code":"SHUTDOWN"' >/dev/null
 wait "$DAEMON_PID"
