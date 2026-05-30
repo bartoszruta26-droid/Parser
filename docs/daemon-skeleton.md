@@ -8,6 +8,7 @@ Ten katalog pokazuje schematyczny szkielet daemona dla projektu wieloaplikacyjne
 - `frontend/cli/daemonctl.sh` — referencyjny frontend CLI wysyłający polecenia użytkownika.
 - `frontend/tui/parser-tui.sh` — referencyjny frontend TUI z menu operatorskim.
 - `frontend/gui/parser-gui.sh` — referencyjny frontend GUI oparty o zenity/kdialog.
+- `frontend/webui/index.php` — referencyjny frontend WebUI dla Apache2/PHP.
 - `backend/adapter/backend-client.sh` — referencyjny klient backendowy wysyłający zadania systemowe.
 - `config/daemon.conf.example` — przykładowa konfiguracja ścieżek, timeoutów i wersji protokołu.
 - `systemd/parser-template-daemon.service` — przykładowa jednostka systemd.
@@ -53,6 +54,7 @@ W drugim terminalu:
 ./frontend/cli/daemonctl.sh status
 ./frontend/tui/parser-tui.sh --once status
 ./frontend/gui/parser-gui.sh --once status
+WEBUI_COMMAND=status php ./frontend/webui/api/daemon.php
 ./frontend/cli/daemonctl.sh frontend.event '{"button":"start"}'
 ./backend/adapter/backend-client.sh '{"task":"sync"}'
 ```

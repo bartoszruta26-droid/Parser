@@ -40,6 +40,12 @@ DAEMON_CONFIG="$TMP_DIR/daemon.conf" "$PROJECT_ROOT/frontend/tui/parser-tui.sh" 
 DAEMON_CONFIG="$TMP_DIR/daemon.conf" "$PROJECT_ROOT/frontend/tui/parser-tui.sh" --once frontend.event --payload '{"source":"tui-smoke"}' --no-color | grep '"code":"FRONTEND_EVENT"' >/dev/null
 DAEMON_CONFIG="$TMP_DIR/daemon.conf" "$PROJECT_ROOT/frontend/gui/parser-gui.sh" --once status | grep '"code":"STATUS"' >/dev/null
 DAEMON_CONFIG="$TMP_DIR/daemon.conf" "$PROJECT_ROOT/frontend/gui/parser-gui.sh" --once frontend.event --payload '{"source":"gui-smoke"}' | grep '"code":"FRONTEND_EVENT"' >/dev/null
+if command -v php >/dev/null 2>&1; then
+  DAEMON_CONFIG="$TMP_DIR/daemon.conf" WEBUI_COMMAND=status php "$PROJECT_ROOT/frontend/webui/api/daemon.php" | grep '"code":"STATUS"' >/dev/null
+  DAEMON_CONFIG="$TMP_DIR/daemon.conf" WEBUI_COMMAND=frontend.event WEBUI_PAYLOAD='{"source":"webui-smoke"}' php "$PROJECT_ROOT/frontend/webui/api/daemon.php" | grep '"code":"FRONTEND_EVENT"' >/dev/null
+else
+  echo "php not installed; skipping WebUI smoke checks" >&2
+fi
 DAEMON_CONFIG="$TMP_DIR/daemon.conf" "$PROJECT_ROOT/backend/adapter/backend-client.sh" '{"task":"smoke"}' | grep '"code":"BACKEND_JOB"' >/dev/null
 DAEMON_CONFIG="$TMP_DIR/daemon.conf" "$PROJECT_ROOT/frontend/cli/daemonctl.sh" shutdown | grep '"code":"SHUTDOWN"' >/dev/null
 wait "$DAEMON_PID"

@@ -777,12 +777,14 @@ Najważniejsze elementy szkieletu:
 - `frontend/cli/daemonctl.sh` — przykładowy frontend CLI wysyłający polecenia do daemona.
 - `frontend/tui/parser-tui.sh` — przykładowy frontend TUI z menu operatorskim do komunikacji z daemonem.
 - `frontend/gui/parser-gui.sh` — przykładowy frontend GUI używający zenity albo kdialog do komunikacji z daemonem.
+- `frontend/webui/index.php` — przykładowy frontend WebUI instalowany do katalogu HTTP Apache2.
 - `backend/adapter/backend-client.sh` — przykładowy adapter backendowy wysyłający zadania do daemona.
 - `config/daemon.conf.example` — konfiguracja domyślna do lokalnego uruchomienia i wdrożenia.
 - `systemd/parser-template-daemon.service` — przykład uruchamiania daemona jako usługi systemowej.
 - `docs/daemon-skeleton.md` — opis protokołu, komponentów i kierunków rozbudowy.
 - `docs/tui-skeleton.md` — opis aplikacji TUI, trybu interaktywnego i trybu jednorazowego.
 - `docs/gui-skeleton.md` — opis aplikacji GUI, zależności dialogowych i trybu jednorazowego.
+- `docs/webui-skeleton.md` — opis aplikacji WebUI, bramki PHP i instalacji do Apache2.
 - `tests/smoke-daemon.sh` — podstawowy test komunikacji frontend/backend z daemonem.
 
 Szybkie uruchomienie lokalne:
@@ -798,6 +800,7 @@ W drugim terminalu można wysłać przykładowe polecenia:
 ./frontend/cli/daemonctl.sh status
 ./frontend/tui/parser-tui.sh --once status
 ./frontend/gui/parser-gui.sh --once status
+WEBUI_COMMAND=status php ./frontend/webui/api/daemon.php
 ./frontend/cli/daemonctl.sh frontend.event '{"button":"start"}'
 ./backend/adapter/backend-client.sh '{"task":"sync"}'
 ```
