@@ -20,6 +20,7 @@ Projekt jest szablonem dla systemów, które:
 - nie wykorzystują języka Python jako technologii projektowej,
 - posiadają daemona działającego w tle,
 - posiadają wiele frontendów obsługujących tę samą logikę systemową,
+- posiadają aplikację Android App łączącą się z serwerem wskazanym w pliku konfiguracyjnym,
 - pozwalają uruchamiać niezależne podaplikacje lub załączniki z poziomu frontendów,
 - są przygotowane do rozszerzania o kolejne warianty sprzętowe, komunikacyjne i funkcjonalne.
 
@@ -274,7 +275,21 @@ Typowe zastosowania aplikacji Android:
 - konfiguracja prostych parametrów,
 - skanowanie kodów, identyfikatorów lub etykiet, jeżeli projekt docelowy tego wymaga.
 
-Aplikacja Android powinna komunikować się z daemonem przez oficjalny interfejs systemu, a nie przez bezpośrednie modyfikowanie plików wewnętrznych bez uzgodnionego protokołu.
+Aplikacja Android powinna komunikować się z daemonem przez oficjalny interfejs systemu, a nie przez bezpośrednie modyfikowanie plików wewnętrznych bez uzgodnionego protokołu. W tym template aplikacja Android App nie powinna mieć na stałe zaszytego adresu usługi. Powinna odczytywać adres, port, protokół i ewentualną ścieżkę bazową serwera z pliku konfiguracyjnego.
+
+Serwer, z którym łączy się Android App, jest jedną z podaplikacji tego repozytorium. Należy traktować go jako osobny komponent wykonywalny, posiadający własną konfigurację, logi, wersję, procedurę uruchomienia oraz opisany kontrakt komunikacyjny. Dzięki temu aplikacja Android może pracować z różnymi instancjami środowiska, na przykład z serwerem developerskim, testowym, lokalnym serwerem Raspberry Pi albo serwerem wdrożonym w sieci lokalnej, bez przebudowywania aplikacji mobilnej.
+
+Plik konfiguracyjny Android App powinien zawierać co najmniej:
+
+- adres hosta lub nazwę DNS serwera,
+- port serwera,
+- protokół komunikacji, na przykład HTTP albo HTTPS,
+- bazową ścieżkę API, jeżeli serwer ją stosuje,
+- nazwę profilu środowiskowego,
+- opcjonalne limity czasowe połączeń,
+- opcjonalną informację o wymaganym certyfikacie albo trybie zaufania w środowisku lokalnym.
+
+Aplikacja Android powinna walidować konfigurację przy starcie i prezentować czytelny komunikat, jeżeli serwer z pliku konfiguracyjnego jest niedostępny, niepoprawnie opisany albo niezgodny z oczekiwaną wersją API. Nie należy używać ukrytych wartości domyślnych, które mogłyby przypadkowo skierować aplikację mobilną na niewłaściwy serwer.
 
 ## 7. Podaplikacje i załączniki wykonywane przez frontend
 
@@ -291,11 +306,12 @@ Podaplikacje mogą pełnić funkcje:
 - narzędzi serwisowych,
 - rozszerzeń demonstracyjnych,
 - zadań jednorazowych,
-- komponentów integrujących urządzenia zewnętrzne.
+- komponentów integrujących urządzenia zewnętrzne,
+- serwera komunikacyjnego dla Android App, którego adres i parametry połączenia są wskazywane w pliku konfiguracyjnym aplikacji mobilnej.
 
 ### 7.2. Zasady uruchamiania
 
-Podaplikacje powinny być uruchamiane w sposób kontrolowany. Zaleca się, aby frontend zgłaszał intencję uruchomienia podaplikacji do daemona, a daemon podejmował decyzję o wykonaniu. Dzięki temu można zachować spójność uprawnień, logowania i kontroli błędów.
+Podaplikacje powinny być uruchamiane w sposób kontrolowany. Zaleca się, aby frontend zgłaszał intencję uruchomienia podaplikacji do daemona, a daemon podejmował decyzję o wykonaniu. Dzięki temu można zachować spójność uprawnień, logowania i kontroli błędów. Jeżeli podaplikacją jest serwer przeznaczony dla Android App, jego uruchomienie, zatrzymanie, port nasłuchiwania, dostępność sieciowa i logi powinny być zarządzane tak samo jawnie jak w przypadku pozostałych komponentów systemu.
 
 Każde uruchomienie podaplikacji powinno mieć:
 
@@ -348,7 +364,10 @@ Poniższa struktura jest propozycją organizacji projektu template. Może być d
 │   │   └── ajax/
 │   ├── gui/
 │   └── android/
+│       ├── config/
+│       └── app/
 ├── apps/
+│   ├── android-server/
 │   ├── app-example-one/
 │   └── app-example-two/
 ├── attachments/
@@ -389,10 +408,11 @@ Zalecane typy konfiguracji:
 - konfiguracja sprzętowa,
 - konfiguracja sieciowa,
 - konfiguracja frontendów,
+- konfiguracja Android App wskazująca serwer będący podaplikacją repozytorium,
 - konfiguracja podaplikacji,
 - konfiguracja polityk bezpieczeństwa.
 
-Sekrety, hasła, tokeny i klucze prywatne nie powinny być przechowywane w repozytorium. Projekt powinien przewidywać mechanizm dostarczania sekretów poza kodem źródłowym.
+Sekrety, hasła, tokeny i klucze prywatne nie powinny być przechowywane w repozytorium. Projekt powinien przewidywać mechanizm dostarczania sekretów poza kodem źródłowym. Konfiguracja aplikacji Android powinna być rozdzielona na bezpieczny przykład wersjonowany w repozytorium oraz lokalną konfigurację wdrożeniową, w której wskazuje się konkretny serwer-podaplikację, jego port, protokół i profil środowiska.
 
 ## 10. Logowanie i diagnostyka
 
