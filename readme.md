@@ -15,10 +15,12 @@ Projekt jest szablonem dla systemów, które:
 - działają głównie w środowisku Linux,
 - mogą być uruchamiane na komputerach jednopłytkowych Raspberry Pi,
 - wykorzystują skrypty powłoki Bash do automatyzacji, instalacji, utrzymania i integracji,
+- udostępniają WebUI oparte o Apache2, PHP i JavaScript, z możliwością okazjonalnego użycia AJAX do asynchronicznej komunikacji,
 - mogą okazjonalnie zawierać komponenty napisane w C, C++ lub C#,
 - nie wykorzystują języka Python jako technologii projektowej,
 - posiadają daemona działającego w tle,
 - posiadają wiele frontendów obsługujących tę samą logikę systemową,
+- posiadają aplikację Android App łączącą się z serwerem wskazanym w pliku konfiguracyjnym,
 - pozwalają uruchamiać niezależne podaplikacje lub załączniki z poziomu frontendów,
 - są przygotowane do rozszerzania o kolejne warianty sprzętowe, komunikacyjne i funkcjonalne.
 
@@ -117,7 +119,31 @@ Typowe zastosowania:
 
 Kod w tych językach powinien być izolowany w osobnych modułach i nie powinien wymuszać zależności na całym repozytorium, jeżeli nie jest to konieczne.
 
-### 4.4. Brak Pythona
+### 4.4. WebUI: Apache2, PHP, JavaScript i AJAX
+
+Warstwa WebUI projektu korzysta z klasycznego, stabilnego i łatwego do wdrożenia stosu webowego opartego o **Apache2**, **PHP** oraz **JavaScript**. Takie podejście jest szczególnie praktyczne w środowiskach Linux i Raspberry Pi, ponieważ pozwala wykorzystać powszechnie dostępne pakiety systemowe, proste wdrożenie przez menedżer pakietów dystrybucji oraz dobrą integrację z lokalnym systemem plików, uprawnieniami i usługami systemowymi.
+
+Apache2 pełni rolę serwera HTTP dla WebUI. Może obsługiwać pliki statyczne, routing do skryptów PHP, lokalne zasady dostępu, certyfikaty TLS, logi dostępowe oraz integrację z mechanizmami systemowymi. Konfiguracja Apache2 powinna być traktowana jako część wdrożenia aplikacji, a nie jako ręczna, nieudokumentowana zmiana na urządzeniu.
+
+PHP jest podstawową technologią po stronie serwera dla WebUI. Powinno odpowiadać za generowanie widoków, obsługę formularzy, walidację danych wejściowych, przygotowanie żądań do daemona oraz prezentację wyników użytkownikowi. Kod PHP nie powinien zastępować daemona ani przejmować krytycznej logiki systemowej; jego zadaniem jest pośredniczenie między użytkownikiem a oficjalnym interfejsem aplikacji.
+
+JavaScript jest używany po stronie przeglądarki do poprawy ergonomii interfejsu, walidacji formularzy, dynamicznej aktualizacji widoków oraz obsługi elementów interaktywnych. Projekt nie wymaga, aby cały WebUI był aplikacją typu SPA; preferowane jest podejście proste, czytelne i możliwe do utrzymania na urządzeniach o ograniczonych zasobach.
+
+AJAX może być wykorzystywany okazjonalnie tam, gdzie daje realną korzyść użytkową, na przykład do odświeżania statusu daemona bez przeładowania strony, pobierania fragmentów logów, uruchamiania krótkich akcji operatorskich albo sprawdzania postępu podaplikacji. AJAX nie powinien jednak tworzyć niejawnych, trudnych do udokumentowania ścieżek komunikacji. Każde wywołanie asynchroniczne powinno mieć opisany endpoint, format danych, zasady autoryzacji i sposób obsługi błędów.
+
+Zalecane elementy WebUI:
+
+- konfiguracja Apache2 przechowywana w repozytorium lub generowana przez skrypt instalacyjny,
+- oddzielenie plików publicznych od plików konfiguracyjnych i roboczych,
+- ograniczenie uprawnień użytkownika, pod którym działa serwer WWW,
+- brak bezpośredniego wykonywania poleceń systemowych na podstawie niezweryfikowanych danych HTTP,
+- komunikacja z daemonem przez jawny i kontrolowany interfejs,
+- walidacja danych wejściowych po stronie PHP niezależnie od walidacji JavaScript,
+- logowanie istotnych operacji administracyjnych,
+- spójne komunikaty błędów dla użytkownika i administratora,
+- możliwość działania w sieci lokalnej bez zależności od zewnętrznych usług chmurowych.
+
+### 4.5. Brak Pythona
 
 Projekt z założenia **nie wykorzystuje języka Python**. Oznacza to, że:
 
@@ -185,6 +211,146 @@ Daemon powinien być projektowany z myślą o długotrwałej pracy. Należy uwzg
 - czytelne kody błędów,
 - przewidywalne zachowanie po restarcie.
 
+### 5.4. Schemat daemona dla aplikacji medycznej
+
+W projekcie docelowym daemon może pełnić rolę głównego procesu aplikacji medycznej. Taka aplikacja zapisuje i porządkuje informacje o pacjencie oraz dane opisujące stan fizjologiczny, biomechaniczny, psychiczny i społeczny. Ze względu na wrażliwy charakter danych medycznych daemon powinien być projektowany jako komponent szczególnie ostrożny, audytowalny, odporny na utratę danych i jednoznacznie oddzielony od warstw prezentacji.
+
+Daemon aplikacji medycznej powinien realizować następujący schemat odpowiedzialności:
+
+```text
++---------------------------------------------------------------+
+|                    medical-template-daemon                    |
++---------------------------------------------------------------+
+|  1. Warstwa startowa i nadzorcza                              |
+|     - inicjalizacja konfiguracji                              |
+|     - kontrola wersji schematu danych                         |
+|     - blokada pojedynczej instancji                           |
+|     - rejestracja sygnałów systemowych                        |
++---------------------------------------------------------------+
+|  2. Warstwa komunikacji                                       |
+|     - lokalne API dla TUI, WebUI, GUI                         |
+|     - API lub brama dla serwera Android App                   |
+|     - kontrola uprawnień i sesji                              |
+|     - walidacja żądań wejściowych                             |
++---------------------------------------------------------------+
+|  3. Warstwa domeny medycznej                                  |
+|     - kartoteka pacjenta                                      |
+|     - pomiary fizjologiczne                                   |
+|     - pomiary biomechaniczne                                  |
+|     - obserwacje psychiczne                                   |
+|     - obserwacje społeczne                                    |
+|     - notatki, zdarzenia i klasyfikacje                       |
++---------------------------------------------------------------+
+|  4. Warstwa zapisu i integralności danych                     |
+|     - repozytorium danych lokalnych                           |
+|     - transakcje lub bezpieczne operacje plikowe              |
+|     - walidacja kompletności rekordu                          |
+|     - wersjonowanie struktury danych                          |
+|     - backup i odtwarzanie                                    |
++---------------------------------------------------------------+
+|  5. Warstwa audytu, logów i bezpieczeństwa                    |
+|     - dziennik operacji na danych pacjenta                    |
+|     - rozdzielenie logów technicznych i medycznych            |
+|     - minimalizacja danych w logach                           |
+|     - kontrola dostępu do eksportu                            |
++---------------------------------------------------------------+
+|  6. Warstwa zadań i podaplikacji                              |
+|     - import danych                                           |
+|     - eksport raportów                                        |
+|     - generowanie zestawień                                   |
+|     - komunikacja z urządzeniami pomiarowymi                  |
++---------------------------------------------------------------+
+```
+
+Podstawową jednostką danych jest rekord pacjenta. Rekord powinien posiadać stabilny identyfikator techniczny, dane opisowe wymagane przez projekt docelowy, metadane utworzenia i modyfikacji oraz powiązania z pomiarami i obserwacjami. Jeżeli system przechowuje dane osobowe, należy projektować go tak, aby dane identyfikujące pacjenta były logicznie oddzielone od danych pomiarowych wszędzie tam, gdzie jest to praktyczne.
+
+Zalecany model logiczny danych medycznych obejmuje:
+
+- **Pacjent** — identyfikator pacjenta, dane ewidencyjne, status rekordu, zgody, uwagi administracyjne i podstawowe metadane.
+- **Sesja badania lub obserwacji** — data, miejsce, operator, źródło danych, typ wizyty, urządzenie lub frontend, z którego pochodzi wpis.
+- **Parametry fizjologiczne** — na przykład tętno, ciśnienie, saturacja, temperatura, masa, wzrost, oddech, wyniki pomiarów z urządzeń lub wartości wprowadzane ręcznie.
+- **Parametry biomechaniczne** — na przykład zakres ruchu, siła, stabilność, postawa, chód, równowaga, pomiary obciążenia lub inne wielkości zależne od celu aplikacji.
+- **Parametry psychiczne** — na przykład oceny samopoczucia, poziom stresu, ankiety, skale opisowe, obserwacje operatora i wpisy deklaratywne pacjenta.
+- **Parametry społeczne** — na przykład warunki funkcjonowania, wsparcie opiekunów, aktywność społeczna, czynniki środowiskowe i informacje opisowe istotne dla projektu.
+- **Zdarzenie medyczne lub operatorskie** — wykonanie pomiaru, korekta wpisu, import, eksport, uruchomienie podaplikacji, błąd walidacji albo zmiana konfiguracji.
+- **Załącznik lub raport** — plik, wynik podaplikacji, eksport, dokumentacja sesji, wykres albo inny artefakt powiązany z pacjentem lub sesją.
+
+Daemon nie powinien zapisywać danych medycznych bez walidacji. Każdy wpis powinien być sprawdzony pod kątem kompletności, typu danych, zakresu wartości, jednostki miary, czasu pomiaru, źródła wpisu i powiązania z pacjentem. Dane wprowadzone ręcznie powinny być odróżnialne od danych pochodzących z urządzenia, importu, serwera Android App albo podaplikacji.
+
+Przykładowy schemat przepływu danych w daemonie:
+
+```text
+frontend / urządzenie / podaplikacja
+        |
+        v
+interfejs komunikacyjny daemona
+        |
+        v
+walidacja żądania i uprawnień
+        |
+        v
+normalizacja jednostek oraz formatu czasu
+        |
+        v
+warstwa domeny pacjenta i sesji
+        |
+        v
+bezpieczny zapis danych
+        |
+        v
+audyt operacji oraz odpowiedź do klienta
+```
+
+W kontekście danych pacjenta daemon powinien rozróżniać co najmniej następujące operacje:
+
+- utworzenie rekordu pacjenta,
+- odczyt rekordu pacjenta,
+- aktualizacja danych pacjenta,
+- dezaktywacja lub archiwizacja rekordu,
+- dopisanie nowej sesji badania,
+- dopisanie pomiaru fizjologicznego,
+- dopisanie pomiaru biomechanicznego,
+- dopisanie obserwacji psychicznej,
+- dopisanie obserwacji społecznej,
+- dołączenie raportu lub załącznika,
+- eksport danych wybranego pacjenta,
+- anonimizacja lub pseudonimizacja danych, jeżeli projekt docelowy tego wymaga.
+
+Dane medyczne powinny być zapisywane w sposób pozwalający odtworzyć historię zmian. Jeżeli wpis zostanie skorygowany, system powinien przechować informację o pierwotnej wartości, nowej wartości, czasie korekty, źródle korekty i przyczynie zmiany. Nie zaleca się cichego nadpisywania danych pacjenta bez śladu audytowego.
+
+Daemon powinien udostępniać frontendom wyłącznie kontrolowane operacje. TUI może służyć do diagnostyki i pracy serwisowej, WebUI do obsługi lokalnej przez przeglądarkę, GUI do stanowiska operatorskiego, a Android App do pracy mobilnej przez serwer-podaplikację wskazany w konfiguracji. Żaden frontend nie powinien bezpośrednio omijać daemona przy zapisie danych pacjenta.
+
+W aplikacji medycznej szczególnie istotne są zasady bezpieczeństwa danych:
+
+- minimalizacja zakresu danych przetwarzanych przez pojedynczy komponent,
+- rozdzielenie uprawnień operatora, administratora i procesu technicznego,
+- brak danych wrażliwych w zwykłych logach technicznych,
+- szyfrowanie transmisji tam, gdzie dane opuszczają host lokalny,
+- kontrolowany eksport danych pacjenta,
+- rejestrowanie odczytu i modyfikacji danych medycznych,
+- regularny backup oraz test odtwarzania,
+- jasna procedura usuwania, archiwizacji lub anonimizacji danych,
+- możliwość wyłączenia interfejsów sieciowych, które nie są używane w danym wdrożeniu.
+
+Przykładowy minimalny układ katalogów danych daemona dla aplikacji medycznej może wyglądać następująco:
+
+```text
+/var/lib/template-project/medical/
+├── patients/
+├── sessions/
+├── measurements/
+│   ├── physiological/
+│   ├── biomechanical/
+│   ├── psychological/
+│   └── social/
+├── attachments/
+├── exports/
+├── audit/
+└── schema-version
+```
+
+Powyższy układ jest przykładem logicznym. Projekt docelowy może używać bazy danych, plików strukturalnych albo hybrydowego podejścia, ale musi zachować jednoznaczne zasady identyfikacji pacjenta, integralności wpisów, audytu oraz bezpiecznego eksportu.
+
 ## 6. Frontendy systemu
 
 Projekt zakłada istnienie kilku niezależnych interfejsów frontendowych. Każdy frontend powinien korzystać z tych samych mechanizmów komunikacji z daemonem i nie powinien wymagać osobnego wariantu logiki backendowej.
@@ -208,7 +374,7 @@ TUI jest szczególnie ważne na Raspberry Pi oraz w środowiskach bez graficzneg
 
 ### 6.2. WebUI
 
-WebUI jest interfejsem przeglądarkowym. Powinien umożliwiać wygodną obsługę systemu z poziomu sieci lokalnej albo bezpiecznie skonfigurowanego dostępu zdalnego.
+WebUI jest interfejsem przeglądarkowym opartym o Apache2, PHP oraz JavaScript. Powinien umożliwiać wygodną obsługę systemu z poziomu sieci lokalnej albo bezpiecznie skonfigurowanego dostępu zdalnego. W uzasadnionych miejscach WebUI może używać AJAX do asynchronicznego pobierania statusu, logów, wyników zadań oraz postępu podaplikacji bez pełnego przeładowania strony.
 
 Przykładowe funkcje WebUI:
 
@@ -221,7 +387,7 @@ Przykładowe funkcje WebUI:
 - zarządzanie załącznikami,
 - prezentacja danych w formie tabel, wykresów lub kart.
 
-WebUI powinno mieć jasno określone zasady autoryzacji i uwierzytelniania, szczególnie jeśli system jest dostępny poza hostem lokalnym.
+WebUI powinno mieć jasno określone zasady autoryzacji i uwierzytelniania, szczególnie jeśli system jest dostępny poza hostem lokalnym. Konfiguracja Apache2, struktura katalogów PHP, pliki JavaScript oraz ewentualne endpointy AJAX powinny być wersjonowane, opisane i instalowane w sposób powtarzalny.
 
 ### 6.3. GUI
 
@@ -249,7 +415,21 @@ Typowe zastosowania aplikacji Android:
 - konfiguracja prostych parametrów,
 - skanowanie kodów, identyfikatorów lub etykiet, jeżeli projekt docelowy tego wymaga.
 
-Aplikacja Android powinna komunikować się z daemonem przez oficjalny interfejs systemu, a nie przez bezpośrednie modyfikowanie plików wewnętrznych bez uzgodnionego protokołu.
+Aplikacja Android powinna komunikować się z daemonem przez oficjalny interfejs systemu, a nie przez bezpośrednie modyfikowanie plików wewnętrznych bez uzgodnionego protokołu. W tym template aplikacja Android App nie powinna mieć na stałe zaszytego adresu usługi. Powinna odczytywać adres, port, protokół i ewentualną ścieżkę bazową serwera z pliku konfiguracyjnego.
+
+Serwer, z którym łączy się Android App, jest jedną z podaplikacji tego repozytorium. Należy traktować go jako osobny komponent wykonywalny, posiadający własną konfigurację, logi, wersję, procedurę uruchomienia oraz opisany kontrakt komunikacyjny. Dzięki temu aplikacja Android może pracować z różnymi instancjami środowiska, na przykład z serwerem developerskim, testowym, lokalnym serwerem Raspberry Pi albo serwerem wdrożonym w sieci lokalnej, bez przebudowywania aplikacji mobilnej.
+
+Plik konfiguracyjny Android App powinien zawierać co najmniej:
+
+- adres hosta lub nazwę DNS serwera,
+- port serwera,
+- protokół komunikacji, na przykład HTTP albo HTTPS,
+- bazową ścieżkę API, jeżeli serwer ją stosuje,
+- nazwę profilu środowiskowego,
+- opcjonalne limity czasowe połączeń,
+- opcjonalną informację o wymaganym certyfikacie albo trybie zaufania w środowisku lokalnym.
+
+Aplikacja Android powinna walidować konfigurację przy starcie i prezentować czytelny komunikat, jeżeli serwer z pliku konfiguracyjnego jest niedostępny, niepoprawnie opisany albo niezgodny z oczekiwaną wersją API. Nie należy używać ukrytych wartości domyślnych, które mogłyby przypadkowo skierować aplikację mobilną na niewłaściwy serwer.
 
 ## 7. Podaplikacje i załączniki wykonywane przez frontend
 
@@ -266,11 +446,12 @@ Podaplikacje mogą pełnić funkcje:
 - narzędzi serwisowych,
 - rozszerzeń demonstracyjnych,
 - zadań jednorazowych,
-- komponentów integrujących urządzenia zewnętrzne.
+- komponentów integrujących urządzenia zewnętrzne,
+- serwera komunikacyjnego dla Android App, którego adres i parametry połączenia są wskazywane w pliku konfiguracyjnym aplikacji mobilnej.
 
 ### 7.2. Zasady uruchamiania
 
-Podaplikacje powinny być uruchamiane w sposób kontrolowany. Zaleca się, aby frontend zgłaszał intencję uruchomienia podaplikacji do daemona, a daemon podejmował decyzję o wykonaniu. Dzięki temu można zachować spójność uprawnień, logowania i kontroli błędów.
+Podaplikacje powinny być uruchamiane w sposób kontrolowany. Zaleca się, aby frontend zgłaszał intencję uruchomienia podaplikacji do daemona, a daemon podejmował decyzję o wykonaniu. Dzięki temu można zachować spójność uprawnień, logowania i kontroli błędów. Jeżeli podaplikacją jest serwer przeznaczony dla Android App, jego uruchomienie, zatrzymanie, port nasłuchiwania, dostępność sieciowa i logi powinny być zarządzane tak samo jawnie jak w przypadku pozostałych komponentów systemu.
 
 Każde uruchomienie podaplikacji powinno mieć:
 
@@ -316,9 +497,17 @@ Poniższa struktura jest propozycją organizacji projektu template. Może być d
 ├── frontends/
 │   ├── tui/
 │   ├── webui/
+│   │   ├── apache2/
+│   │   ├── public/
+│   │   ├── php/
+│   │   ├── js/
+│   │   └── ajax/
 │   ├── gui/
 │   └── android/
+│       ├── config/
+│       └── app/
 ├── apps/
+│   ├── android-server/
 │   ├── app-example-one/
 │   └── app-example-two/
 ├── attachments/
@@ -359,10 +548,11 @@ Zalecane typy konfiguracji:
 - konfiguracja sprzętowa,
 - konfiguracja sieciowa,
 - konfiguracja frontendów,
+- konfiguracja Android App wskazująca serwer będący podaplikacją repozytorium,
 - konfiguracja podaplikacji,
 - konfiguracja polityk bezpieczeństwa.
 
-Sekrety, hasła, tokeny i klucze prywatne nie powinny być przechowywane w repozytorium. Projekt powinien przewidywać mechanizm dostarczania sekretów poza kodem źródłowym.
+Sekrety, hasła, tokeny i klucze prywatne nie powinny być przechowywane w repozytorium. Projekt powinien przewidywać mechanizm dostarczania sekretów poza kodem źródłowym. Konfiguracja aplikacji Android powinna być rozdzielona na bezpieczny przykład wersjonowany w repozytorium oraz lokalną konfigurację wdrożeniową, w której wskazuje się konkretny serwer-podaplikację, jego port, protokół i profil środowiska.
 
 ## 10. Logowanie i diagnostyka
 
