@@ -211,6 +211,146 @@ Daemon powinien być projektowany z myślą o długotrwałej pracy. Należy uwzg
 - czytelne kody błędów,
 - przewidywalne zachowanie po restarcie.
 
+### 5.4. Schemat daemona dla aplikacji medycznej
+
+W projekcie docelowym daemon może pełnić rolę głównego procesu aplikacji medycznej. Taka aplikacja zapisuje i porządkuje informacje o pacjencie oraz dane opisujące stan fizjologiczny, biomechaniczny, psychiczny i społeczny. Ze względu na wrażliwy charakter danych medycznych daemon powinien być projektowany jako komponent szczególnie ostrożny, audytowalny, odporny na utratę danych i jednoznacznie oddzielony od warstw prezentacji.
+
+Daemon aplikacji medycznej powinien realizować następujący schemat odpowiedzialności:
+
+```text
++---------------------------------------------------------------+
+|                    medical-template-daemon                    |
++---------------------------------------------------------------+
+|  1. Warstwa startowa i nadzorcza                              |
+|     - inicjalizacja konfiguracji                              |
+|     - kontrola wersji schematu danych                         |
+|     - blokada pojedynczej instancji                           |
+|     - rejestracja sygnałów systemowych                        |
++---------------------------------------------------------------+
+|  2. Warstwa komunikacji                                       |
+|     - lokalne API dla TUI, WebUI, GUI                         |
+|     - API lub brama dla serwera Android App                   |
+|     - kontrola uprawnień i sesji                              |
+|     - walidacja żądań wejściowych                             |
++---------------------------------------------------------------+
+|  3. Warstwa domeny medycznej                                  |
+|     - kartoteka pacjenta                                      |
+|     - pomiary fizjologiczne                                   |
+|     - pomiary biomechaniczne                                  |
+|     - obserwacje psychiczne                                   |
+|     - obserwacje społeczne                                    |
+|     - notatki, zdarzenia i klasyfikacje                       |
++---------------------------------------------------------------+
+|  4. Warstwa zapisu i integralności danych                     |
+|     - repozytorium danych lokalnych                           |
+|     - transakcje lub bezpieczne operacje plikowe              |
+|     - walidacja kompletności rekordu                          |
+|     - wersjonowanie struktury danych                          |
+|     - backup i odtwarzanie                                    |
++---------------------------------------------------------------+
+|  5. Warstwa audytu, logów i bezpieczeństwa                    |
+|     - dziennik operacji na danych pacjenta                    |
+|     - rozdzielenie logów technicznych i medycznych            |
+|     - minimalizacja danych w logach                           |
+|     - kontrola dostępu do eksportu                            |
++---------------------------------------------------------------+
+|  6. Warstwa zadań i podaplikacji                              |
+|     - import danych                                           |
+|     - eksport raportów                                        |
+|     - generowanie zestawień                                   |
+|     - komunikacja z urządzeniami pomiarowymi                  |
++---------------------------------------------------------------+
+```
+
+Podstawową jednostką danych jest rekord pacjenta. Rekord powinien posiadać stabilny identyfikator techniczny, dane opisowe wymagane przez projekt docelowy, metadane utworzenia i modyfikacji oraz powiązania z pomiarami i obserwacjami. Jeżeli system przechowuje dane osobowe, należy projektować go tak, aby dane identyfikujące pacjenta były logicznie oddzielone od danych pomiarowych wszędzie tam, gdzie jest to praktyczne.
+
+Zalecany model logiczny danych medycznych obejmuje:
+
+- **Pacjent** — identyfikator pacjenta, dane ewidencyjne, status rekordu, zgody, uwagi administracyjne i podstawowe metadane.
+- **Sesja badania lub obserwacji** — data, miejsce, operator, źródło danych, typ wizyty, urządzenie lub frontend, z którego pochodzi wpis.
+- **Parametry fizjologiczne** — na przykład tętno, ciśnienie, saturacja, temperatura, masa, wzrost, oddech, wyniki pomiarów z urządzeń lub wartości wprowadzane ręcznie.
+- **Parametry biomechaniczne** — na przykład zakres ruchu, siła, stabilność, postawa, chód, równowaga, pomiary obciążenia lub inne wielkości zależne od celu aplikacji.
+- **Parametry psychiczne** — na przykład oceny samopoczucia, poziom stresu, ankiety, skale opisowe, obserwacje operatora i wpisy deklaratywne pacjenta.
+- **Parametry społeczne** — na przykład warunki funkcjonowania, wsparcie opiekunów, aktywność społeczna, czynniki środowiskowe i informacje opisowe istotne dla projektu.
+- **Zdarzenie medyczne lub operatorskie** — wykonanie pomiaru, korekta wpisu, import, eksport, uruchomienie podaplikacji, błąd walidacji albo zmiana konfiguracji.
+- **Załącznik lub raport** — plik, wynik podaplikacji, eksport, dokumentacja sesji, wykres albo inny artefakt powiązany z pacjentem lub sesją.
+
+Daemon nie powinien zapisywać danych medycznych bez walidacji. Każdy wpis powinien być sprawdzony pod kątem kompletności, typu danych, zakresu wartości, jednostki miary, czasu pomiaru, źródła wpisu i powiązania z pacjentem. Dane wprowadzone ręcznie powinny być odróżnialne od danych pochodzących z urządzenia, importu, serwera Android App albo podaplikacji.
+
+Przykładowy schemat przepływu danych w daemonie:
+
+```text
+frontend / urządzenie / podaplikacja
+        |
+        v
+interfejs komunikacyjny daemona
+        |
+        v
+walidacja żądania i uprawnień
+        |
+        v
+normalizacja jednostek oraz formatu czasu
+        |
+        v
+warstwa domeny pacjenta i sesji
+        |
+        v
+bezpieczny zapis danych
+        |
+        v
+audyt operacji oraz odpowiedź do klienta
+```
+
+W kontekście danych pacjenta daemon powinien rozróżniać co najmniej następujące operacje:
+
+- utworzenie rekordu pacjenta,
+- odczyt rekordu pacjenta,
+- aktualizacja danych pacjenta,
+- dezaktywacja lub archiwizacja rekordu,
+- dopisanie nowej sesji badania,
+- dopisanie pomiaru fizjologicznego,
+- dopisanie pomiaru biomechanicznego,
+- dopisanie obserwacji psychicznej,
+- dopisanie obserwacji społecznej,
+- dołączenie raportu lub załącznika,
+- eksport danych wybranego pacjenta,
+- anonimizacja lub pseudonimizacja danych, jeżeli projekt docelowy tego wymaga.
+
+Dane medyczne powinny być zapisywane w sposób pozwalający odtworzyć historię zmian. Jeżeli wpis zostanie skorygowany, system powinien przechować informację o pierwotnej wartości, nowej wartości, czasie korekty, źródle korekty i przyczynie zmiany. Nie zaleca się cichego nadpisywania danych pacjenta bez śladu audytowego.
+
+Daemon powinien udostępniać frontendom wyłącznie kontrolowane operacje. TUI może służyć do diagnostyki i pracy serwisowej, WebUI do obsługi lokalnej przez przeglądarkę, GUI do stanowiska operatorskiego, a Android App do pracy mobilnej przez serwer-podaplikację wskazany w konfiguracji. Żaden frontend nie powinien bezpośrednio omijać daemona przy zapisie danych pacjenta.
+
+W aplikacji medycznej szczególnie istotne są zasady bezpieczeństwa danych:
+
+- minimalizacja zakresu danych przetwarzanych przez pojedynczy komponent,
+- rozdzielenie uprawnień operatora, administratora i procesu technicznego,
+- brak danych wrażliwych w zwykłych logach technicznych,
+- szyfrowanie transmisji tam, gdzie dane opuszczają host lokalny,
+- kontrolowany eksport danych pacjenta,
+- rejestrowanie odczytu i modyfikacji danych medycznych,
+- regularny backup oraz test odtwarzania,
+- jasna procedura usuwania, archiwizacji lub anonimizacji danych,
+- możliwość wyłączenia interfejsów sieciowych, które nie są używane w danym wdrożeniu.
+
+Przykładowy minimalny układ katalogów danych daemona dla aplikacji medycznej może wyglądać następująco:
+
+```text
+/var/lib/template-project/medical/
+├── patients/
+├── sessions/
+├── measurements/
+│   ├── physiological/
+│   ├── biomechanical/
+│   ├── psychological/
+│   └── social/
+├── attachments/
+├── exports/
+├── audit/
+└── schema-version
+```
+
+Powyższy układ jest przykładem logicznym. Projekt docelowy może używać bazy danych, plików strukturalnych albo hybrydowego podejścia, ale musi zachować jednoznaczne zasady identyfikacji pacjenta, integralności wpisów, audytu oraz bezpiecznego eksportu.
+
 ## 6. Frontendy systemu
 
 Projekt zakłada istnienie kilku niezależnych interfejsów frontendowych. Każdy frontend powinien korzystać z tych samych mechanizmów komunikacji z daemonem i nie powinien wymagać osobnego wariantu logiki backendowej.
