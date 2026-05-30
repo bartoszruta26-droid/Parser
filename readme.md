@@ -766,3 +766,32 @@ Najważniejsze zasady template to:
 - gotowość do dalszego rozwoju.
 
 Szablon powinien być bazą dla kolejnych projektów, w których istotne są stabilność, przejrzystość, możliwość utrzymania oraz jasne rozdzielenie odpowiedzialności między komponentami systemu.
+
+## 23. Dodany szkielet daemona referencyjnego
+
+Repozytorium zawiera teraz minimalny, schematyczny szkielet aplikacji daemon pokazujący komunikację z aplikacjami frontendowymi i backendowymi bez dodatkowych zależności projektowych.
+
+Najważniejsze elementy szkieletu:
+
+- `daemon/bin/template-daemon.sh` — główny proces daemona utrzymujący stan i obsługujący komendy.
+- `frontend/cli/daemonctl.sh` — przykładowy frontend CLI wysyłający polecenia do daemona.
+- `backend/adapter/backend-client.sh` — przykładowy adapter backendowy wysyłający zadania do daemona.
+- `config/daemon.conf.example` — konfiguracja domyślna do lokalnego uruchomienia i wdrożenia.
+- `systemd/parser-template-daemon.service` — przykład uruchamiania daemona jako usługi systemowej.
+- `docs/daemon-skeleton.md` — opis protokołu, komponentów i kierunków rozbudowy.
+- `tests/smoke-daemon.sh` — podstawowy test komunikacji frontend/backend z daemonem.
+
+Szybkie uruchomienie lokalne:
+
+```bash
+./scripts/run-daemon.sh
+```
+
+W drugim terminalu można wysłać przykładowe polecenia:
+
+```bash
+./frontend/cli/daemonctl.sh ping
+./frontend/cli/daemonctl.sh status
+./frontend/cli/daemonctl.sh frontend.event '{"button":"start"}'
+./backend/adapter/backend-client.sh '{"task":"sync"}'
+```

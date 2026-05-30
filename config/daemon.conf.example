@@ -1,0 +1,13 @@
+# Example configuration for the template daemon.
+# Copy this file to /etc/parser-template/daemon.conf or set DAEMON_CONFIG
+# to another path before starting the service.
+
+APP_NAME="parser-template"
+RUN_DIR="/tmp/parser-template"
+LOG_DIR="/tmp/parser-template/log"
+COMMAND_FIFO="${RUN_DIR}/commands.fifo"
+RESPONSE_DIR="${RUN_DIR}/responses"
+STATE_FILE="${RUN_DIR}/state.env"
+DAEMON_LOG="${LOG_DIR}/daemon.log"
+PROTOCOL_VERSION="1"
+REQUEST_TIMEOUT_SECONDS="10"
