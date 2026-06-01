@@ -12,7 +12,9 @@ jq empty \
   "$PROJECT_ROOT/protocol/schemas/daemon-message.schema.json" \
   "$PROJECT_ROOT/protocol/examples/request.json" \
   "$PROJECT_ROOT/protocol/examples/response.json" \
-  "$PROJECT_ROOT/protocol/examples/medical-fhir-message.json"
+  "$PROJECT_ROOT/protocol/examples/medical-fhir-message.json" \
+  "$PROJECT_ROOT/protocol/examples/rpi-sensor-message.json" \
+  "$PROJECT_ROOT/protocol/examples/rpi-effector-message.json"
 
 awk -F',' 'NR == 1 { expected = "protocol,request_id,source,command,payload_json,timestamp_utc,correlation_id"; if ($0 != expected) exit 1 }' \
   "$PROJECT_ROOT/protocol/examples/request.csv"

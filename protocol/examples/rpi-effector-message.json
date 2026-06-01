@@ -1,0 +1,19 @@
+{
+  "protocol": "1",
+  "request_id": "rpi-main-1710000200-1234",
+  "source": "rpi-effector",
+  "command": "swarm.effector",
+  "payload": {
+    "node": "rpi-main",
+    "role": "main",
+    "effector": "relay",
+    "state": "on",
+    "timestamp_utc": "2026-06-01T09:01:00Z"
+  },
+  "meta": {
+    "timestamp_utc": "2026-06-01T09:01:00Z",
+    "correlation_id": "rpi-swarm-002",
+    "content_type": "application/json",
+    "schema": "daemon-message"
+  }
+}

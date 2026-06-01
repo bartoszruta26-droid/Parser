@@ -3,7 +3,13 @@
   "$id": "https://example.local/parser-template/daemon-message.schema.json",
   "title": "Parser Template Daemon Message",
   "type": "object",
-  "required": ["protocol", "request_id", "source", "command", "payload"],
+  "required": [
+    "protocol",
+    "request_id",
+    "source",
+    "command",
+    "payload"
+  ],
   "additionalProperties": false,
   "properties": {
     "protocol": {
@@ -21,12 +27,43 @@
     "source": {
       "type": "string",
       "description": "Client family sending the message.",
-      "enum": ["cli", "tui", "gui", "webui", "frontend", "backend", "api", "medical", "test"]
+      "anyOf": [
+        {
+          "enum": [
+            "cli",
+            "tui",
+            "gui",
+            "webui",
+            "frontend",
+            "backend",
+            "api",
+            "medical",
+            "test",
+            "rpi-sensor",
+            "rpi-effector",
+            "rpi-forward"
+          ]
+        },
+        {
+          "type": "string",
+          "pattern": "^(rpi-[A-Za-z0-9_.:-]+|remote-[A-Za-z0-9_.:-]+)$"
+        }
+      ]
     },
     "command": {
       "type": "string",
       "description": "Command name handled by the daemon.",
-      "enum": ["ping", "status", "frontend.event", "backend.job", "medical.message", "shutdown"]
+      "enum": [
+        "ping",
+        "status",
+        "frontend.event",
+        "backend.job",
+        "medical.message",
+        "shutdown",
+        "swarm.sensor",
+        "swarm.effector",
+        "swarm.forward"
+      ]
     },
     "payload": {
       "type": "object",
@@ -37,10 +74,19 @@
       "description": "Optional transport, auth, trace and compatibility metadata.",
       "additionalProperties": true,
       "properties": {
-        "timestamp_utc": {"type": "string", "format": "date-time"},
-        "correlation_id": {"type": "string"},
-        "content_type": {"type": "string"},
-        "schema": {"type": "string"}
+        "timestamp_utc": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "correlation_id": {
+          "type": "string"
+        },
+        "content_type": {
+          "type": "string"
+        },
+        "schema": {
+          "type": "string"
+        }
       }
     }
   }

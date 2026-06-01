@@ -24,7 +24,17 @@ STATE_FILE="\${RUN_DIR}/state.env"
 DAEMON_LOG="\${LOG_DIR}/daemon.log"
 PROTOCOL_VERSION="1"
 REQUEST_TIMEOUT_SECONDS="3"
+RPI_NODE_NAME="rpi-test-main"
+RPI_NODE_ROLE="main"
+SENSOR_QUEUE_FILE="\${RUN_DIR}/sensor-events.jsonl"
+EFFECTOR_QUEUE_FILE="\${RUN_DIR}/effector-events.jsonl"
+SWARM_QUEUE_FILE="\${RUN_DIR}/swarm-events.jsonl"
+RPI_SENSOR_SOURCES="temperature=$TMP_DIR/sensors/temperature.value"
+RPI_EFFECTOR_TARGETS="relay=$TMP_DIR/effectors/relay.state"
 CONF
+
+mkdir -p "$TMP_DIR/sensors"
+printf '22.5\n' > "$TMP_DIR/sensors/temperature.value"
 
 DAEMON_CONFIG="$TMP_DIR/daemon.conf" "$PROJECT_ROOT/daemon/bin/template-daemon.sh" &
 DAEMON_PID="$!"
@@ -48,6 +58,12 @@ else
 fi
 DAEMON_CONFIG="$TMP_DIR/daemon.conf" "$PROJECT_ROOT/backend/adapter/backend-client.sh" '{"task":"smoke"}' | grep '"code":"BACKEND_JOB"' >/dev/null
 DAEMON_CONFIG="$TMP_DIR/daemon.conf" "$PROJECT_ROOT/protocol/bin/daemon-send.sh" --source medical --command medical.message --payload '{"profile":"fhir","masked":true}' | grep '"code":"MEDICAL_MESSAGE"' >/dev/null
+DAEMON_CONFIG="$TMP_DIR/daemon.conf" "$PROJECT_ROOT/swarm/bin/rpi-swarm.sh" sensor-read temperature | grep '"code":"SWARM_SENSOR"' >/dev/null
+DAEMON_CONFIG="$TMP_DIR/daemon.conf" "$PROJECT_ROOT/swarm/bin/rpi-swarm.sh" effector-send relay on | grep '"code":"SWARM_EFFECTOR"' >/dev/null
+grep '"sensor":"temperature"' "$TMP_DIR/run/sensor-events.jsonl" >/dev/null
+grep '"effector":"relay"' "$TMP_DIR/run/effector-events.jsonl" >/dev/null
+grep '^on$' "$TMP_DIR/effectors/relay.state" >/dev/null
+DAEMON_CONFIG="$TMP_DIR/daemon.conf" "$PROJECT_ROOT/swarm/bin/rpi-swarm.sh" forward-main swarm.sensor '{"node":"rpi-worker-01","sensor":"remote","value":"1"}' | grep '"code":"SWARM_SENSOR"' >/dev/null
 DAEMON_CONFIG="$TMP_DIR/daemon.conf" "$PROJECT_ROOT/frontend/cli/daemonctl.sh" shutdown | grep '"code":"SHUTDOWN"' >/dev/null
 wait "$DAEMON_PID"
 DAEMON_PID=""

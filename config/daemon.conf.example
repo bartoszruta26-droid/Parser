@@ -20,6 +20,9 @@ PROTOCOL_EXAMPLES_DIR="/opt/parser-template/protocol/examples"
 MEDICAL_PROTOCOL_PROFILE="fhir"
 PROTOCOL_TRANSPORT="fifo"
 PROTOCOL_RUNTIME="bash-linux"
+SENSOR_QUEUE_FILE="${RUN_DIR}/sensor-events.jsonl"
+EFFECTOR_QUEUE_FILE="${RUN_DIR}/effector-events.jsonl"
+SWARM_QUEUE_FILE="${RUN_DIR}/swarm-events.jsonl"
 
 # Raspberry Pi swarm topology.
 # Copy this file on every RPi and change RPI_NODE_NAME/RPI_NODE_ROLE to match
@@ -35,9 +38,16 @@ RPI_MAIN_DAEMON_PORT="8701"
 RPI_MAIN_DAEMON_ENDPOINT="tcp://${RPI_MAIN_DAEMON_HOST}:${RPI_MAIN_DAEMON_PORT}"
 RPI_LOCAL_DAEMON_BIND_HOST="0.0.0.0"
 RPI_LOCAL_DAEMON_BIND_PORT="8701"
+RPI_ENABLE_TCP_FORWARD="false"
 
 # Inventory of Raspberry Pi nodes in the swarm. Keep addresses static through
 # DHCP reservations or static network configuration so worker daemons always
 # know where to reach the main daemon.
 RPI_SWARM_NODES="rpi-main=192.168.1.10:8701,rpi-worker-01=192.168.1.11:8701,rpi-worker-02=192.168.1.12:8701,rpi-worker-03=192.168.1.13:8701"
 RPI_WORKER_DAEMON_ENDPOINTS="rpi-worker-01=tcp://192.168.1.11:8701,rpi-worker-02=tcp://192.168.1.12:8701,rpi-worker-03=tcp://192.168.1.13:8701"
+
+# Optional hardware maps for the RPi swarm helper. A source/target can be a
+# readable file or an executable script. Effector file targets are overwritten
+# with the requested state, while executable targets receive the state as $1.
+RPI_SENSOR_SOURCES="temperature=/tmp/parser-template/sensors/temperature.value,humidity=/tmp/parser-template/sensors/humidity.value"
+RPI_EFFECTOR_TARGETS="relay=/tmp/parser-template/effectors/relay.state,fan=/tmp/parser-template/effectors/fan.state"
