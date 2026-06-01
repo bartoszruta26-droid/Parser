@@ -34,17 +34,26 @@ write_command_fifo() {
   local request_id="$1"
   local command="$2"
   local payload="$3"
-  local command_fd
+  local deadline="$4"
+  local writer_pid
 
-  # Open the FIFO read-write so a stale FIFO without a daemon reader does not
-  # block this frontend before the response timeout can be enforced.
-  if ! exec {command_fd}<>"$COMMAND_FIFO"; then
-    echo "Unable to open daemon command FIFO: $COMMAND_FIFO" >&2
-    exit 69
+  (printf '%s|frontend|%s|%s\n' "$request_id" "$command" "$payload" > "$COMMAND_FIFO") &
+  writer_pid=$!
+
+  while kill -0 "$writer_pid" 2>/dev/null; do
+    if (( SECONDS >= deadline )); then
+      kill "$writer_pid" 2>/dev/null || true
+      wait "$writer_pid" 2>/dev/null || true
+      echo "Timed out waiting for daemon FIFO reader: $COMMAND_FIFO" >&2
+      return 70
+    fi
+    sleep 0.1
+  done
+
+  if ! wait "$writer_pid"; then
+    echo "Unable to write daemon command FIFO: $COMMAND_FIFO" >&2
+    return 69
   fi
-
-  printf '%s|frontend|%s|%s\n' "$request_id" "$command" "$payload" >&"$command_fd"
-  exec {command_fd}>&-
 }
 
 send_command() {
@@ -60,9 +69,9 @@ send_command() {
     exit 69
   fi
 
-  write_command_fifo "$request_id" "$command" "$payload"
-
   deadline=$((SECONDS + REQUEST_TIMEOUT_SECONDS))
+  write_command_fifo "$request_id" "$command" "$payload" "$deadline" || exit $?
+
   while [[ ! -f "$response_file" ]]; do
     if (( SECONDS >= deadline )); then
       echo "Timed out waiting for daemon response: $response_file" >&2
