@@ -97,6 +97,14 @@ handle_backend_job() {
   send_response "$request_id" "$(json_response "$request_id" "accepted" "BACKEND_JOB" "Backend job accepted" "{\"queued\":true}")"
 }
 
+
+handle_medical_message() {
+  local request_id="$1"
+  local payload="$2"
+  log "INFO" "Accepted medical message request_id=$request_id payload=<masked> payload_bytes=${#payload}"
+  send_response "$request_id" "$(json_response "$request_id" "accepted" "MEDICAL_MESSAGE" "Medical protocol message accepted" "{\"queued\":true,\"masked\":true}")"
+}
+
 handle_frontend_event() {
   local request_id="$1"
   local payload="$2"
@@ -133,6 +141,9 @@ handle_command() {
       ;;
     backend.job)
       handle_backend_job "$request_id" "$payload"
+      ;;
+    medical.message)
+      handle_medical_message "$request_id" "$payload"
       ;;
     shutdown)
       handle_shutdown "$request_id"

@@ -18,7 +18,7 @@ run() {
 }
 
 run mkdir -p "$PREFIX" "$CONFIG_DIR" "$APACHE_HTTP_DIR"
-run cp -R "$PROJECT_ROOT/daemon" "$PROJECT_ROOT/frontend" "$PROJECT_ROOT/backend" "$PROJECT_ROOT/scripts" "$PREFIX/"
+run cp -R "$PROJECT_ROOT/daemon" "$PROJECT_ROOT/frontend" "$PROJECT_ROOT/backend" "$PROJECT_ROOT/scripts" "$PROJECT_ROOT/protocol" "$PREFIX/"
 run cp -R "$PROJECT_ROOT/frontend/webui/." "$APACHE_HTTP_DIR/"
 run cp "$PROJECT_ROOT/config/daemon.conf.example" "$CONFIG_DIR/daemon.conf"
 run cp "$PROJECT_ROOT/systemd/parser-template-daemon.service" "$SYSTEMD_DIR/parser-template-daemon.service"

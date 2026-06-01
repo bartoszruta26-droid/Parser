@@ -47,6 +47,7 @@ else
   echo "php not installed; skipping WebUI smoke checks" >&2
 fi
 DAEMON_CONFIG="$TMP_DIR/daemon.conf" "$PROJECT_ROOT/backend/adapter/backend-client.sh" '{"task":"smoke"}' | grep '"code":"BACKEND_JOB"' >/dev/null
+DAEMON_CONFIG="$TMP_DIR/daemon.conf" "$PROJECT_ROOT/protocol/bin/daemon-send.sh" --source medical --command medical.message --payload '{"profile":"fhir","masked":true}' | grep '"code":"MEDICAL_MESSAGE"' >/dev/null
 DAEMON_CONFIG="$TMP_DIR/daemon.conf" "$PROJECT_ROOT/frontend/cli/daemonctl.sh" shutdown | grep '"code":"SHUTDOWN"' >/dev/null
 wait "$DAEMON_PID"
 DAEMON_PID=""

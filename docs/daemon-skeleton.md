@@ -14,6 +14,8 @@ Ten katalog pokazuje schematyczny szkielet daemona dla projektu wieloaplikacyjne
 - `systemd/parser-template-daemon.service` — przykładowa jednostka systemd.
 - `scripts/run-daemon.sh` — lokalny starter developerski.
 - `scripts/install.sh` — schematyczny instalator z trybem `DRY_RUN=1`.
+- `docs/protocol-schema.md` — opis wariantów protokołu: JSON, API, CSV i profil medyczny.
+- `docs/protocol-linux-bash.md` — założenia wykonawcze komunikacji bez Pythona, oparte o Bash i aplikacje linuksowe.
 
 ## Protokół komunikacji
 
@@ -67,3 +69,7 @@ WEBUI_COMMAND=status php ./frontend/webui/api/daemon.php
 - Rozdzielenie handlerów komend na osobne moduły.
 - Dodanie kolejek zadań, retry i trwałego storage.
 - Dodanie testów integracyjnych uruchamiających daemona w izolowanym katalogu tymczasowym.
+
+## Schemat protokołu
+
+Szczegółowy kontrakt komunikacji znajduje się w `docs/protocol-schema.md`, a założenia wykonawcze Bash/Linux w `docs/protocol-linux-bash.md`. Dokument opisuje kanoniczny model wiadomości oraz warianty `json`, `api`, `csv` i `medical`, w tym przykłady w katalogu `protocol/examples` oraz schemat JSON w `protocol/schemas/daemon-message.schema.json`.
