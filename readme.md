@@ -786,6 +786,8 @@ Najważniejsze elementy szkieletu:
 - `docs/gui-skeleton.md` — opis aplikacji GUI, zależności dialogowych i trybu jednorazowego.
 - `docs/webui-skeleton.md` — opis aplikacji WebUI, bramki PHP i instalacji do Apache2.
 - `docs/protocol-schema.md` — schemat protokołu komunikacji z opcjami JSON, API, CSV i profilem medycznym.
+- `docs/protocol-linux-bash.md` — doprecyzowanie, że komunikacja runtime opiera się o Bash i aplikacje linuksowe bez Pythona.
+- `protocol/bin/daemon-send.sh` — czysty Bash helper do wysyłania komend przez FIFO.
 - `protocol/schemas/daemon-message.schema.json` — maszynowy schemat kanonicznej wiadomości protokołu.
 - `protocol/examples/` — przykłady wiadomości JSON, CSV oraz profili medycznych.
 - `tests/smoke-daemon.sh` — podstawowy test komunikacji frontend/backend z daemonem.

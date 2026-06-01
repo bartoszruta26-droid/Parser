@@ -1,11 +1,12 @@
 # Schemat protokołu komunikacji
 
-Ten dokument definiuje wspólny kontrakt komunikacyjny dla daemona, frontendów, backendów i integracji zewnętrznych. Szkielet zakłada jeden logiczny model wiadomości oraz kilka sposobów serializacji albo ekspozycji: `json`, `api`, `csv` i profil medyczny.
+Ten dokument definiuje wspólny kontrakt komunikacyjny dla daemona, frontendów, backendów i integracji zewnętrznych. Szkielet zakłada jeden logiczny model wiadomości oraz kilka sposobów serializacji albo ekspozycji: `json`, `api`, `csv` i profil medyczny. Implementacja referencyjna pozostaje oparta o Bash i aplikacje linuksowe, bez Pythona w daemonie ani klientach lokalnych.
 
 ## 1. Cele protokołu
 
 - Jeden kontrakt dla CLI, TUI, GUI, WebUI, backendów i integracji zewnętrznych.
 - Możliwość wyboru formatu transportowego bez zmiany logiki daemona.
+- Brak zależności od Pythona w runtime daemona, klientach lokalnych i narzędziach instalacyjnych.
 - Jednoznaczne pola identyfikujące żądanie, źródło, komendę, payload i metadane.
 - Wsparcie dla prostych systemów embedded oraz integracji branżowych, w tym medycznych.
 - Możliwość wersjonowania i zachowania kompatybilności wstecznej.
@@ -35,7 +36,7 @@ Każdy format powinien dać się zmapować do modelu kanonicznego:
 | `meta.content_type` | opcjonalne | string | Format serializacji albo typ dokumentu źródłowego. |
 | `meta.schema` | opcjonalne | string | Nazwa profilu walidacyjnego. |
 
-Schemat JSON znajduje się w `protocol/schemas/daemon-message.schema.json`.
+Schemat JSON znajduje się w `protocol/schemas/daemon-message.schema.json`. Założenia wykonawcze Bash/Linux opisuje `docs/protocol-linux-bash.md`.
 
 ## 4. Opcja `json`
 
