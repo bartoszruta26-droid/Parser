@@ -27,7 +27,24 @@ USAGE
 }
 
 new_request_id() {
-  printf 'frontend-%s-%s' "$(date +%s)" "$$"
+  printf 'frontend-%s-%s-%s' "$(date +%s%N)" "$$" "$RANDOM"
+}
+
+write_command_fifo() {
+  local request_id="$1"
+  local command="$2"
+  local payload="$3"
+  local command_fd
+
+  # Open the FIFO read-write so a stale FIFO without a daemon reader does not
+  # block this frontend before the response timeout can be enforced.
+  if ! exec {command_fd}<>"$COMMAND_FIFO"; then
+    echo "Unable to open daemon command FIFO: $COMMAND_FIFO" >&2
+    exit 69
+  fi
+
+  printf '%s|frontend|%s|%s\n' "$request_id" "$command" "$payload" >&"$command_fd"
+  exec {command_fd}>&-
 }
 
 send_command() {
@@ -43,7 +60,7 @@ send_command() {
     exit 69
   fi
 
-  printf '%s|frontend|%s|%s\n' "$request_id" "$command" "$payload" > "$COMMAND_FIFO"
+  write_command_fifo "$request_id" "$command" "$payload"
 
   deadline=$((SECONDS + REQUEST_TIMEOUT_SECONDS))
   while [[ ! -f "$response_file" ]]; do

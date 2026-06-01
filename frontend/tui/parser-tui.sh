@@ -44,7 +44,24 @@ reset_color() {
 }
 
 new_request_id() {
-  printf 'tui-%s-%s' "$(date +%s)" "$$"
+  printf 'tui-%s-%s-%s' "$(date +%s%N)" "$$" "$RANDOM"
+}
+
+write_command_fifo() {
+  local request_id="$1"
+  local command="$2"
+  local payload="$3"
+  local command_fd
+
+  # Open the FIFO read-write so a stale FIFO without a daemon reader does not
+  # block this frontend before the response timeout can be enforced.
+  if ! exec {command_fd}<>"$COMMAND_FIFO"; then
+    printf 'Nie można otworzyć FIFO daemona: %s\n' "$COMMAND_FIFO" >&2
+    return 69
+  fi
+
+  printf '%s|tui|%s|%s\n' "$request_id" "$command" "$payload" >&"$command_fd"
+  exec {command_fd}>&-
 }
 
 send_daemon_command() {
@@ -60,7 +77,7 @@ send_daemon_command() {
     return 69
   fi
 
-  printf '%s|tui|%s|%s\n' "$request_id" "$command" "$payload" > "$COMMAND_FIFO"
+  write_command_fifo "$request_id" "$command" "$payload"
 
   deadline=$((SECONDS + REQUEST_TIMEOUT_SECONDS))
   while [[ ! -f "$response_file" ]]; do
