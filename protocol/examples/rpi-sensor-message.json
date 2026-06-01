@@ -1,0 +1,19 @@
+{
+  "protocol": "1",
+  "request_id": "rpi-worker-01-1710000100-1234",
+  "source": "rpi-sensor",
+  "command": "swarm.sensor",
+  "payload": {
+    "node": "rpi-worker-01",
+    "role": "worker",
+    "sensor": "temperature",
+    "value": "21.7",
+    "timestamp_utc": "2026-06-01T09:00:00Z"
+  },
+  "meta": {
+    "timestamp_utc": "2026-06-01T09:00:00Z",
+    "correlation_id": "rpi-swarm-001",
+    "content_type": "application/json",
+    "schema": "daemon-message"
+  }
+}

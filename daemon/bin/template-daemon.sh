@@ -23,6 +23,11 @@ RESPONSE_DIR="${RESPONSE_DIR:-${RUN_DIR}/responses}"
 STATE_FILE="${STATE_FILE:-${RUN_DIR}/state.env}"
 DAEMON_LOG="${DAEMON_LOG:-${LOG_DIR}/daemon.log}"
 PROTOCOL_VERSION="${PROTOCOL_VERSION:-1}"
+SENSOR_QUEUE_FILE="${SENSOR_QUEUE_FILE:-${RUN_DIR}/sensor-events.jsonl}"
+EFFECTOR_QUEUE_FILE="${EFFECTOR_QUEUE_FILE:-${RUN_DIR}/effector-events.jsonl}"
+SWARM_QUEUE_FILE="${SWARM_QUEUE_FILE:-${RUN_DIR}/swarm-events.jsonl}"
+RPI_NODE_NAME="${RPI_NODE_NAME:-local}"
+RPI_NODE_ROLE="${RPI_NODE_ROLE:-main}"
 
 running="true"
 started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -37,6 +42,8 @@ log() {
 prepare_runtime() {
   mkdir -p "$RUN_DIR" "$LOG_DIR" "$RESPONSE_DIR"
   chmod 0750 "$RUN_DIR" "$LOG_DIR" "$RESPONSE_DIR"
+  touch "$SENSOR_QUEUE_FILE" "$EFFECTOR_QUEUE_FILE" "$SWARM_QUEUE_FILE"
+  chmod 0640 "$SENSOR_QUEUE_FILE" "$EFFECTOR_QUEUE_FILE" "$SWARM_QUEUE_FILE"
 
   if [[ -p "$COMMAND_FIFO" ]]; then
     return
@@ -54,7 +61,22 @@ PROTOCOL_VERSION="$PROTOCOL_VERSION"
 STARTED_AT="$started_at"
 LAST_COMMAND="$last_command"
 RUNNING="$running"
+RPI_NODE_NAME="$RPI_NODE_NAME"
+RPI_NODE_ROLE="$RPI_NODE_ROLE"
+SENSOR_QUEUE_FILE="$SENSOR_QUEUE_FILE"
+EFFECTOR_QUEUE_FILE="$EFFECTOR_QUEUE_FILE"
+SWARM_QUEUE_FILE="$SWARM_QUEUE_FILE"
 STATE
+}
+
+json_escape() {
+  local value="$1"
+  value="${value//\\/\\\\}"
+  value="${value//\"/\\\"}"
+  value="${value//$'\n'/\\n}"
+  value="${value//$'\r'/\\r}"
+  value="${value//$'\t'/\\t}"
+  printf '%s' "$value"
 }
 
 json_response() {
@@ -81,13 +103,50 @@ send_response() {
 handle_status() {
   local request_id="$1"
   local payload
-  payload="{\"app\":\"$APP_NAME\",\"started_at\":\"$started_at\",\"last_command\":\"$last_command\"}"
+  payload="{\"app\":\"$(json_escape "$APP_NAME")\",\"started_at\":\"$started_at\",\"last_command\":\"$(json_escape "$last_command")\",\"rpi_node\":\"$(json_escape "$RPI_NODE_NAME")\",\"rpi_role\":\"$(json_escape "$RPI_NODE_ROLE")\"}"
   send_response "$request_id" "$(json_response "$request_id" "ok" "STATUS" "Daemon is running" "$payload")"
 }
 
 handle_ping() {
   local request_id="$1"
   send_response "$request_id" "$(json_response "$request_id" "ok" "PONG" "pong")"
+}
+
+append_event() {
+  local event_file="$1"
+  local source="$2"
+  local command="$3"
+  local payload="$4"
+
+  printf '{"timestamp_utc":"%s","node":"%s","role":"%s","source":"%s","command":"%s","payload":%s}\n' \
+    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(json_escape "$RPI_NODE_NAME")" "$(json_escape "$RPI_NODE_ROLE")" "$(json_escape "$source")" "$(json_escape "$command")" "$payload" >> "$event_file"
+}
+
+handle_swarm_sensor() {
+  local request_id="$1"
+  local source="$2"
+  local payload="$3"
+  append_event "$SENSOR_QUEUE_FILE" "$source" "swarm.sensor" "$payload"
+  log "INFO" "Accepted RPi sensor data request_id=$request_id source=$source payload_bytes=${#payload}"
+  send_response "$request_id" "$(json_response "$request_id" "accepted" "SWARM_SENSOR" "RPi sensor data accepted" "{\"queued\":true,\"event_file\":\"$(json_escape "$SENSOR_QUEUE_FILE")\"}")"
+}
+
+handle_swarm_effector() {
+  local request_id="$1"
+  local source="$2"
+  local payload="$3"
+  append_event "$EFFECTOR_QUEUE_FILE" "$source" "swarm.effector" "$payload"
+  log "INFO" "Accepted RPi effector command request_id=$request_id source=$source payload=$payload"
+  send_response "$request_id" "$(json_response "$request_id" "accepted" "SWARM_EFFECTOR" "RPi effector command accepted" "{\"queued\":true,\"event_file\":\"$(json_escape "$EFFECTOR_QUEUE_FILE")\"}")"
+}
+
+handle_swarm_forward() {
+  local request_id="$1"
+  local source="$2"
+  local payload="$3"
+  append_event "$SWARM_QUEUE_FILE" "$source" "swarm.forward" "$payload"
+  log "INFO" "Accepted RPi daemon forwarding request_id=$request_id source=$source payload=$payload"
+  send_response "$request_id" "$(json_response "$request_id" "accepted" "SWARM_FORWARD" "RPi daemon forwarding request accepted" "{\"queued\":true,\"event_file\":\"$(json_escape "$SWARM_QUEUE_FILE")\"}")"
 }
 
 handle_backend_job() {
@@ -138,6 +197,15 @@ handle_command() {
       ;;
     frontend.event)
       handle_frontend_event "$request_id" "$payload"
+      ;;
+    swarm.sensor)
+      handle_swarm_sensor "$request_id" "$source" "$payload"
+      ;;
+    swarm.effector)
+      handle_swarm_effector "$request_id" "$source" "$payload"
+      ;;
+    swarm.forward)
+      handle_swarm_forward "$request_id" "$source" "$payload"
       ;;
     backend.job)
       handle_backend_job "$request_id" "$payload"

@@ -779,6 +779,7 @@ Najważniejsze elementy szkieletu:
 - `frontend/gui/parser-gui.sh` — przykładowy frontend GUI używający zenity albo kdialog do komunikacji z daemonem.
 - `frontend/webui/index.php` — przykładowy frontend WebUI instalowany do katalogu HTTP Apache2.
 - `backend/adapter/backend-client.sh` — przykładowy adapter backendowy wysyłający zadania do daemona.
+- `swarm/bin/rpi-swarm.sh` — helper Bash do odczytu sensorów, sterowania efektorami i przekazywania komunikatów między daemonami Raspberry Pi.
 - `config/daemon.conf.example` — konfiguracja domyślna do lokalnego uruchomienia i wdrożenia.
 - `systemd/parser-template-daemon.service` — przykład uruchamiania daemona jako usługi systemowej.
 - `docs/daemon-skeleton.md` — opis protokołu, komponentów i kierunków rozbudowy.
@@ -787,6 +788,7 @@ Najważniejsze elementy szkieletu:
 - `docs/webui-skeleton.md` — opis aplikacji WebUI, bramki PHP i instalacji do Apache2.
 - `docs/protocol-schema.md` — schemat protokołu komunikacji z opcjami JSON, API, CSV i profilem medycznym.
 - `docs/protocol-linux-bash.md` — doprecyzowanie, że komunikacja runtime opiera się o Bash i aplikacje linuksowe bez Pythona.
+- `docs/rpi-swarm.md` — opis konfiguracji węzłów Raspberry Pi, sensorów, efektorów i przekazywania danych do głównego daemona.
 - `protocol/bin/daemon-send.sh` — czysty Bash helper do wysyłania komend przez FIFO.
 - `protocol/schemas/daemon-message.schema.json` — maszynowy schemat kanonicznej wiadomości protokołu.
 - `protocol/examples/` — przykłady wiadomości JSON, CSV oraz profili medycznych.
