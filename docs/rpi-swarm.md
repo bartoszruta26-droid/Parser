@@ -7,10 +7,12 @@ requests through the daemon protocol.
 
 ## Node roles
 
-Configure every device with the same inventory in `daemon.conf`, but set a
-unique node identity on each Raspberry Pi:
+Swarm mode is disabled in the example configuration by default. Configure every
+device with the same inventory in `daemon.conf`, explicitly enable the helper,
+and set a unique node identity on each Raspberry Pi:
 
 ```bash
+RPI_SWARM_ENABLED="true"
 RPI_NODE_NAME="rpi-worker-01"
 RPI_NODE_ROLE="worker"
 RPI_MAIN_DAEMON_HOST="192.168.1.10"
@@ -18,8 +20,9 @@ RPI_MAIN_DAEMON_PORT="8701"
 ```
 
 Exactly one device should use `RPI_NODE_ROLE="main"`. Worker devices keep their
-own local daemon for hardware access and forward data to the main daemon when
-the deployment enables a network transport.
+own local daemon for hardware access. Leave `RPI_SWARM_ENABLED="false"` until
+the local daemon, helper paths and any network forwarding wrapper are configured
+for the deployment.
 
 ## Sensors
 

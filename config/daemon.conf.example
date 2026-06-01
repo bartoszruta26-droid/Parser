@@ -27,9 +27,9 @@ SWARM_QUEUE_FILE="${RUN_DIR}/swarm-events.jsonl"
 # Raspberry Pi swarm topology.
 # Copy this file on every RPi and change RPI_NODE_NAME/RPI_NODE_ROLE to match
 # the physical device. Exactly one node should keep RPI_NODE_ROLE="main";
-# the remaining nodes should use RPI_NODE_ROLE="worker" and communicate with
-# RPI_MAIN_DAEMON_HOST:RPI_MAIN_DAEMON_PORT through their local daemons.
-RPI_SWARM_ENABLED="true"
+# the remaining nodes should use RPI_NODE_ROLE="worker". Keep swarm disabled
+# until the helper/transport is configured on every participating RPi.
+RPI_SWARM_ENABLED="false"
 RPI_NODE_NAME="rpi-main"
 RPI_NODE_ROLE="main"
 RPI_MAIN_DAEMON_NAME="rpi-main"

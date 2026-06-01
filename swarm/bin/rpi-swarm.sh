@@ -24,6 +24,7 @@ RPI_MAIN_DAEMON_PORT="${RPI_MAIN_DAEMON_PORT:-8701}"
 RPI_SENSOR_SOURCES="${RPI_SENSOR_SOURCES:-}"
 RPI_EFFECTOR_TARGETS="${RPI_EFFECTOR_TARGETS:-}"
 RPI_ENABLE_TCP_FORWARD="${RPI_ENABLE_TCP_FORWARD:-false}"
+RPI_SWARM_ENABLED="${RPI_SWARM_ENABLED:-false}"
 
 usage() {
   cat <<USAGE
@@ -51,6 +52,13 @@ Configuration maps use comma-separated name=target pairs, for example:
   RPI_SENSOR_SOURCES="temperature=/sys/bus/w1/devices/28-xxx/w1_slave,humidity=/opt/parser/read-humidity.sh"
   RPI_EFFECTOR_TARGETS="relay=/tmp/parser-template/relay.state,fan=/opt/parser/set-fan.sh"
 USAGE
+}
+
+require_swarm_enabled() {
+  if [[ "$RPI_SWARM_ENABLED" != "true" ]]; then
+    echo 'RPi swarm is disabled. Set RPI_SWARM_ENABLED="true" after configuring node roles and transport.' >&2
+    exit 78
+  fi
 }
 
 json_escape() {
@@ -139,6 +147,7 @@ apply_effector_target() {
 }
 
 sensor_read() {
+  require_swarm_enabled
   local sensor="${1:-}"
   local value="${2:-}"
   local payload
@@ -150,6 +159,7 @@ sensor_read() {
 }
 
 effector_send() {
+  require_swarm_enabled
   local effector="${1:-}"
   local state="${2:-}"
   local payload
@@ -162,6 +172,7 @@ effector_send() {
 }
 
 forward_main() {
+  require_swarm_enabled
   local command="${1:-}"
   local payload="${2:-{}}"
   local request_id line
@@ -197,6 +208,7 @@ forward_main() {
 }
 
 receive_line() {
+  require_swarm_enabled
   local line="${1:-}"
   local request_id source command payload
 
