@@ -1,0 +1,40 @@
+{
+  "resourceType": "Bundle",
+  "type": "message",
+  "identifier": {
+    "system": "urn:parser-template:message",
+    "value": "medical-1710000000-1234"
+  },
+  "entry": [
+    {
+      "resource": {
+        "resourceType": "MessageHeader",
+        "eventCoding": {
+          "system": "urn:parser-template:event",
+          "code": "daemon-status"
+        },
+        "source": {
+          "name": "parser-template-daemon"
+        },
+        "focus": [
+          {
+            "reference": "Device/parser-template"
+          }
+        ]
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Device",
+        "id": "parser-template",
+        "status": "active",
+        "deviceName": [
+          {
+            "name": "Parser Template Daemon",
+            "type": "user-friendly-name"
+          }
+        ]
+      }
+    }
+  ]
+}

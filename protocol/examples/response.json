@@ -1,0 +1,14 @@
+{
+  "protocol": "1",
+  "request_id": "webui-1710000000-1234",
+  "status": "accepted",
+  "code": "FRONTEND_EVENT",
+  "message": "Frontend event accepted",
+  "payload": {
+    "handled": true
+  },
+  "meta": {
+    "timestamp_utc": "2026-05-30T07:45:01Z",
+    "correlation_id": "case-001"
+  }
+}

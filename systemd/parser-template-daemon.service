@@ -1,0 +1,17 @@
+[Unit]
+Description=Parser Template Daemon
+After=network.target
+
+[Service]
+Type=simple
+Environment=DAEMON_CONFIG=/etc/parser-template/daemon.conf
+ExecStart=/opt/parser-template/daemon/bin/template-daemon.sh
+Restart=on-failure
+RestartSec=3
+User=parser-template
+Group=parser-template
+RuntimeDirectory=parser-template
+RuntimeDirectoryMode=0750
+
+[Install]
+WantedBy=multi-user.target
