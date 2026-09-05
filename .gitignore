@@ -1,96 +1,54 @@
 ```
-# Compiled and build artifacts
-*.pyc
-__pycache__/
-*.o
-*.obj
-*.exe
-*.dll
+# Android build artifacts
+*.apk
+*.aar
+*.dex
 *.so
-*.a
-*.out
-dist/
-build/
-target/
+*.jar
 
-# Dependencies
-.venv/
-venv/
+# Android dependency directories
+.gradle/
+build/
+app/build/
+
+# IDE files
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+
+# Log files
+*.log
+
+# Temp files
+*.tmp
+*.temp
+
+# Environment
 .env
 .env.local
-.env.*
+*.env.*
 
-# Logs and temp files
-*.log
-*.tmp
-*.swp
-*.swo
-
-# Editors
-.vscode/
-.idea/
-
-# System files
-.DS_Store
-Thumbs.db
-
-# Coverage
-coverage/
-htmlcov/
-.coverage
-
-# Python specific
-*.pyc
+# Python artifacts (if any Python components)
 __pycache__/
+*.pyc
 *.pyo
 *.pyd
-.Python
 *.so
-.PyCharmCache/
 
-# Compressed files
-*.zip
-*.gz
-*.tar
-*.tgz
-*.bz2
-*.xz
-*.7z
-*.rar
-*.zst
-*.lz4
-*.lzh
-*.cab
-*.arj
-*.rpm
-*.deb
-*.Z
-*.lz
-*.lzo
-*.tar.gz
-*.tar.bz2
-*.tar.xz
-*.tar.zst
-
-# MyPy
-.mypy_cache/
-__pycache__/
-
-# PyTest
-.pytest_cache/
-
-# Gradle
-.gradle/
-
-# Node
+# Node.js (if any frontend components)
 node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Backup files
-*~
-*.bak
-*.swp
-*.swo
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
 ```

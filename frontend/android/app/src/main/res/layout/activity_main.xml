@@ -1,62 +1,273 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:padding="16dp">
+    android:fillViewport="true">
 
-    <!-- Panel statusu -->
-    <TextView
-        android:id="@+id/tvStatus"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Status: Ładowanie..."
-        android:textSize="16sp"
-        android:textStyle="bold"
-        android:layout_marginBottom="16dp"/>
-
-    <!-- Panel odpowiedzi -->
-    <TextView
-        android:id="@+id/tvResponse"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:text="Oczekiwanie na akcję..."
-        android:textSize="14sp"
-        android:background="#f5f5f5"
-        android:padding="12dp"
-        android:scrollbars="vertical"
-        android:fontFamily="monospace"
-        android:layout_marginBottom="16dp"/>
-
-    <!-- Przyciski akcji -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:layout_marginBottom="8dp">
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <!-- Panel statusu -->
+        <TextView
+            android:id="@+id/tvStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Status: Ładowanie..."
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="16dp"/>
+
+        <!-- Panel odpowiedzi -->
+        <TextView
+            android:id="@+id/tvResponse"
+            android:layout_width="match_parent"
+            android:layout_height="100dp"
+            android:text="Oczekiwanie na akcję..."
+            android:textSize="14sp"
+            android:background="#f5f5f5"
+            android:padding="12dp"
+            android:scrollbars="vertical"
+            android:fontFamily="monospace"
+            android:layout_marginBottom="16dp"/>
+
+        <!-- Przyciski podstawowe -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="16dp">
+
+            <Button
+                android:id="@+id/btnPing"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Ping"
+                android:layout_marginEnd="8dp"/>
+
+            <Button
+                android:id="@+id/btnStatus"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Status"/>
+
+        </LinearLayout>
 
         <Button
-            android:id="@+id/btnPing"
-            android:layout_width="0dp"
+            android:id="@+id/btnRefresh"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Ping"
-            android:layout_marginEnd="8dp"/>
+            android:text="Odśwież"
+            android:layout_marginBottom="16dp"/>
+
+        <!-- Sekcja: Dane Pacjenta -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Dane Pacjenta"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp"/>
+
+        <EditText
+            android:id="@+id/etPatientId"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="ID Pacjenta"
+            android:inputType="text"
+            android:layout_marginBottom="8dp"/>
+
+        <EditText
+            android:id="@+id/etProvider"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Źródło (lekarz, pielęgniarka)"
+            android:inputType="text"
+            android:layout_marginBottom="8dp"/>
+
+        <Spinner
+            android:id="@+id/spinnerDataType"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="8dp"/>
+
+        <EditText
+            android:id="@+id/etChiefComplaint"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Główne dolegliwości"
+            android:inputType="textMultiLine"
+            android:lines="2"
+            android:layout_marginBottom="8dp"/>
+
+        <EditText
+            android:id="@+id/etMedicalHistory"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Historia chorób (oddziel przecinkami)"
+            android:inputType="textMultiLine"
+            android:lines="2"
+            android:layout_marginBottom="8dp"/>
+
+        <EditText
+            android:id="@+id/etMedications"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Leki (oddziel przecinkami)"
+            android:inputType="textMultiLine"
+            android:lines="2"
+            android:layout_marginBottom="8dp"/>
+
+        <EditText
+            android:id="@+id/etAllergies"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Alergie (oddziel przecinkami)"
+            android:inputType="textMultiLine"
+            android:lines="2"
+            android:layout_marginBottom="8dp"/>
 
         <Button
-            android:id="@+id/btnStatus"
-            android:layout_width="0dp"
+            android:id="@+id/btnSendPatientData"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Status"/>
+            android:text="Wyślij dane pacjenta"
+            android:layout_marginBottom="16dp"/>
+
+        <!-- Sekcja: Biosensor -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Dane Biosensora"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp"/>
+
+        <EditText
+            android:id="@+id/etSensorId"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="ID Sensora"
+            android:inputType="text"
+            android:layout_marginBottom="8dp"/>
+
+        <Spinner
+            android:id="@+id/spinnerSensorType"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="8dp"/>
+
+        <EditText
+            android:id="@+id/etSensorValue"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Wartość pomiaru"
+            android:inputType="numberDecimal"
+            android:layout_marginBottom="8dp"/>
+
+        <EditText
+            android:id="@+id/etSensorUnit"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Jednostka (mV, °C, %)"
+            android:inputType="text"
+            android:layout_marginBottom="8dp"/>
+
+        <EditText
+            android:id="@+id/etSampleRate"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Częstotliwość próbkowania (Hz)"
+            android:inputType="numberDecimal"
+            android:layout_marginBottom="8dp"/>
+
+        <EditText
+            android:id="@+id/etQuality"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Jakość sygnału (0-100)"
+            android:inputType="number"
+            android:layout_marginBottom="8dp"/>
+
+        <Button
+            android:id="@+id/btnSendBiosensorData"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Wyślij dane biosensora"
+            android:layout_marginBottom="16dp"/>
+
+        <!-- Sekcja: Biofeedback -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Dane Biofeedback"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp"/>
+
+        <EditText
+            android:id="@+id/etFeedbackSensorId"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="ID Urządzenia"
+            android:inputType="text"
+            android:layout_marginBottom="8dp"/>
+
+        <Spinner
+            android:id="@+id/spinnerFeedbackType"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="8dp"/>
+
+        <EditText
+            android:id="@+id/etFeedbackValue"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Wartość parametru"
+            android:inputType="numberDecimal"
+            android:layout_marginBottom="8dp"/>
+
+        <EditText
+            android:id="@+id/etFeedbackUnit"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Jednostka (ms, μS, °C)"
+            android:inputType="text"
+            android:layout_marginBottom="8dp"/>
+
+        <EditText
+            android:id="@+id/etSessionId"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="ID Sesji"
+            android:inputType="text"
+            android:layout_marginBottom="8dp"/>
+
+        <EditText
+            android:id="@+id/etTargetValue"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Wartość docelowa"
+            android:inputType="numberDecimal"
+            android:layout_marginBottom="8dp"/>
+
+        <EditText
+            android:id="@+id/etProgressPercent"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Postęp (%)"
+            android:inputType="number"
+            android:layout_marginBottom="8dp"/>
+
+        <Button
+            android:id="@+id/btnSendBiofeedbackData"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Wyślij dane biofeedback"/>
 
     </LinearLayout>
-
-    <Button
-        android:id="@+id/btnRefresh"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Odśwież"/>
-
-</LinearLayout>
+</ScrollView>
