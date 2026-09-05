@@ -21,13 +21,25 @@ NO_COLOR="${NO_COLOR:-0}"
 
 last_response="Brak odpowiedzi. Wybierz akcję z menu."
 last_status="nieznany"
+last_sensors="Brak danych z sensorów"
+last_effectors="Brak danych o efektorach"
 
 usage() {
   cat <<USAGE
-Usage: $0 [--once <ping|status|frontend.event|shutdown>] [--payload <json>] [--no-color]
+Usage: $0 [--once <ping|status|frontend.event|shutdown|sensors.list|effectors.list>] [--payload <json>] [--no-color]
 
 Interactive Bash TUI for communicating with the daemon.
 Use --once in scripts and tests to send a single command without opening the menu.
+
+Supported commands:
+  ping              - Check daemon availability
+  status            - Get daemon status
+  frontend.event    - Send frontend event with JSON payload
+  sensors.list      - List available sensors
+  effectors.list    - List available effectors
+  swarm.sensor      - Send sensor data (requires --payload)
+  swarm.effector    - Send effector command (requires --payload)
+  shutdown          - Shutdown daemon
 USAGE
 }
 
@@ -109,6 +121,28 @@ refresh_status() {
   return 1
 }
 
+refresh_sensors() {
+  local response
+  if response="$(send_daemon_command sensors.list 2>/dev/null)"; then
+    last_sensors="$response"
+    return 0
+  fi
+  
+  last_sensors="Brak odpowiedzi od daemona"
+  return 1
+}
+
+refresh_effectors() {
+  local response
+  if response="$(send_daemon_command effectors.list 2>/dev/null)"; then
+    last_effectors="$response"
+    return 0
+  fi
+  
+  last_effectors="Brak odpowiedzi od daemona"
+  return 1
+}
+
 render_header() {
   clear
   color '1;36'
@@ -128,6 +162,20 @@ render_status_panel() {
   printf '%s\n\n' "$last_status"
 }
 
+render_sensors_panel() {
+  color '1;34'
+  printf 'Sensory (czujniki):\n'
+  reset_color
+  printf '%s\n\n' "$last_sensors"
+}
+
+render_effectors_panel() {
+  color '1;35'
+  printf 'Efektory (urządzenia wykonawcze):\n'
+  reset_color
+  printf '%s\n\n' "$last_effectors"
+}
+
 render_response_panel() {
   color '1;32'
   printf 'Ostatnia odpowiedź:\n'
@@ -142,18 +190,50 @@ render_menu() {
   cat <<MENU
   1) Ping daemona
   2) Pobierz status
-  3) Wyślij zdarzenie frontend.event
-  4) Odśwież ekran
+  3) Lista sensorów
+  4) Lista efektorów
+  5) Wyślij dane sensora (swarm.sensor)
+  6) Wyślij komendę efektora (swarm.effector)
+  7) Wyślij zdarzenie frontend.event
+  8) Odśwież ekran
   q) Wyjście
 MENU
   printf '\nWybór: '
 }
 
 prompt_payload() {
-  local payload
-  printf 'Payload JSON dla zdarzenia frontend.event: '
+  local payload prompt_text="$1"
+  printf '%s: ' "${prompt_text:-Payload JSON}"
   IFS= read -r payload
   printf '%s' "${payload:-{}}"
+}
+
+prompt_sensor_data() {
+  local sensor_id sensor_type value unit payload
+  printf 'ID sensora (np. temperature-01): '
+  IFS= read -r sensor_id
+  printf 'Typ sensora (np. temperature, humidity): '
+  IFS= read -r sensor_type
+  printf 'Wartość: '
+  IFS= read -r value
+  printf 'Jednostka (np. C, %%): '
+  IFS= read -r unit
+  
+  payload="{\"sensor_id\":\"${sensor_id:-unknown}\",\"sensor_type\":\"${sensor_type:-unknown}\",\"value\":${value:-0},\"unit\":\"${unit:-}\",\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}"
+  printf '%s' "$payload"
+}
+
+prompt_effector_command() {
+  local effector_id command state payload
+  printf 'ID efektora (np. relay-01): '
+  IFS= read -r effector_id
+  printf 'Komenda (np. on, off, set_speed): '
+  IFS= read -r command
+  printf 'Stan/wartość (np. true, false, 50): '
+  IFS= read -r state
+  
+  payload="{\"effector_id\":\"${effector_id:-unknown}\",\"command\":\"${command:-set}\",\"state\":\"${state:-on}\",\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}"
+  printf '%s' "$payload"
 }
 
 run_action() {
@@ -177,12 +257,16 @@ run_once() {
 }
 
 run_tui() {
-  local choice payload
+  local choice payload sensor_payload effector_payload
   refresh_status >/dev/null || true
+  refresh_sensors >/dev/null || true
+  refresh_effectors >/dev/null || true
 
   while true; do
     render_header
     render_status_panel
+    render_sensors_panel
+    render_effectors_panel
     render_response_panel
     render_menu
     IFS= read -r choice
@@ -195,11 +279,29 @@ run_tui() {
         run_action status || true
         ;;
       3)
-        payload="$(prompt_payload)"
+        refresh_sensors || true
+        ;;
+      4)
+        refresh_effectors || true
+        ;;
+      5)
+        sensor_payload="$(prompt_sensor_data)"
+        run_action swarm.sensor "$sensor_payload" || true
+        refresh_sensors >/dev/null || true
+        ;;
+      6)
+        effector_payload="$(prompt_effector_command)"
+        run_action swarm.effector "$effector_payload" || true
+        refresh_effectors >/dev/null || true
+        ;;
+      7)
+        payload="$(prompt_payload "Payload JSON dla zdarzenia frontend.event")"
         run_action frontend.event "$payload" || true
         ;;
-      4|"")
+      8|"")
         refresh_status >/dev/null || true
+        refresh_sensors >/dev/null || true
+        refresh_effectors >/dev/null || true
         ;;
       q|Q)
         break
@@ -250,7 +352,14 @@ done
 
 if [[ -n "$once_command" ]]; then
   case "$once_command" in
-    ping|status|frontend.event|shutdown)
+    ping|status|frontend.event|shutdown|sensors.list|effectors.list)
+      run_once "$once_command" "$once_payload"
+      ;;
+    swarm.sensor|swarm.effector)
+      if [[ -z "$once_payload" ]]; then
+        printf 'Komenda %s wymaga payload JSON (--payload)\n' "$once_command" >&2
+        exit 64
+      fi
       run_once "$once_command" "$once_payload"
       ;;
     *)
