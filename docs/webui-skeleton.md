@@ -61,3 +61,7 @@ WEBUI_COMMAND=frontend.event WEBUI_PAYLOAD='{"source":"webui"}' php frontend/web
 - Rozdzielenie endpointów API według obszarów funkcjonalnych.
 - Dodanie odczytu konfiguracji publicznej dla frontendu JavaScript.
 - Dodanie WebSocket albo Server-Sent Events dla automatycznego odświeżania stanu.
+- **Dodana obsługa sensorów**: lista, odczyt, dodawanie i usuwanie sensorów przez interfejs WebUI.
+- **Dodana obsługa efektorów**: lista, odczyt, zapis stanu i kontrola efektorów przez interfejs WebUI.
+- Integracja z daemonem medycznym dla komend `sensor.*` i `effector.*`.
+- Wsparcie dla payloadów JSON z identyfikatorami sensorów i efektorów.
