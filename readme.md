@@ -16,7 +16,7 @@ Projekt jest szablonem dla systemów, które:
 - mogą być uruchamiane na komputerach jednopłytkowych Raspberry Pi,
 - wykorzystują skrypty powłoki Bash do automatyzacji, instalacji, utrzymania i integracji,
 - udostępniają WebUI oparte o Apache2, PHP i JavaScript, z możliwością okazjonalnego użycia AJAX do asynchronicznej komunikacji,
-- mogą okazjonalnie zawierać komponenty napisane w C, C++ lub C#,
+- zawierają komponenty napisane w C, C++ lub C#,
 - nie wykorzystują języka Python jako technologii projektowej,
 - posiadają daemona działającego w tle,
 - posiadają wiele frontendów obsługujących tę samą logikę systemową,
@@ -109,7 +109,7 @@ Tam, gdzie jest to właściwe, skrypty powinny sprawdzać wymagane polecenia, up
 
 ### 4.3. C, C++ i C#
 
-Projekt może okazjonalnie wykorzystywać C, C++ lub C# w miejscach, w których uzasadnia to funkcjonalność, wydajność, integracja sprzętowa albo dostępność bibliotek.
+Projekt wykorzystuje C, C++ lub C# w miejscach, w których uzasadnia to funkcjonalność, wydajność, integracja sprzętowa albo dostępność bibliotek.
 
 Typowe zastosowania:
 
