@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Parser Template</string>
+    <string name="config_title">Konfiguracja serwera</string>
+    <string name="action_config">Konfiguracja</string>
+    <string name="status_online">ONLINE</string>
+    <string name="status_offline">OFFLINE</string>
+    <string name="error_communication">Błąd komunikacji z serwerem</string>
+    <string name="error_invalid_config">Nieprawidłowa konfiguracja</string>
+</resources>

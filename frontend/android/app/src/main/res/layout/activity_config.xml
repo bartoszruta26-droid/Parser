@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <!-- Adres hosta -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Adres hosta / DNS"
+            android:textStyle="bold"
+            android:layout_marginBottom="4dp"/>
+
+        <EditText
+            android:id="@+id/etServerHost"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="np. 192.168.1.100"
+            android:inputType="textUri"
+            android:layout_marginBottom="16dp"/>
+
+        <!-- Port -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Port"
+            android:textStyle="bold"
+            android:layout_marginBottom="4dp"/>
+
+        <EditText
+            android:id="@+id/etServerPort"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="np. 8080"
+            android:inputType="number"
+            android:layout_marginBottom="16dp"/>
+
+        <!-- Protokół -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Protokół"
+            android:textStyle="bold"
+            android:layout_marginBottom="4dp"/>
+
+        <EditText
+            android:id="@+id/etServerProtocol"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="http lub https"
+            android:inputType="text"
+            android:layout_marginBottom="16dp"/>
+
+        <!-- Ścieżka API -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Ścieżka bazowa API"
+            android:textStyle="bold"
+            android:layout_marginBottom="4dp"/>
+
+        <EditText
+            android:id="@+id/etApiBasePath"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="np. /api/v1"
+            android:inputType="textUri"
+            android:layout_marginBottom="16dp"/>
+
+        <!-- Timeout połączenia -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Timeout połączenia (ms)"
+            android:textStyle="bold"
+            android:layout_marginBottom="4dp"/>
+
+        <EditText
+            android:id="@+id/etConnectionTimeout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="np. 5000"
+            android:inputType="number"
+            android:layout_marginBottom="16dp"/>
+
+        <!-- Timeout odczytu -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Timeout odczytu (ms)"
+            android:textStyle="bold"
+            android:layout_marginBottom="4dp"/>
+
+        <EditText
+            android:id="@+id/etReadTimeout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="np. 10000"
+            android:inputType="number"
+            android:layout_marginBottom="24dp"/>
+
+        <!-- Przyciski -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btnReset"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Przywróć domyślne"
+                android:layout_marginEnd="8dp"/>
+
+            <Button
+                android:id="@+id/btnSave"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Zapisz"/>
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+</ScrollView>

@@ -1,0 +1,21 @@
+*.iml
+.gradle
+/local.properties
+/.idea/
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# Konfiguracja wdrożeniowa - nie wersjonować
+android-app-config
+
+# Logi
+*.log
+
+# Tymczasowe pliki
+*.tmp
+*.swp
+*~

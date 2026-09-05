@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.example.parserapp">
+
+    <!-- Uprawnienia sieciowe wymagane do komunikacji z serwerem -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- Opcjonalne: uprawnienia dla powiadomień -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Opcjonalne: uprawnienia dla kamery (skanowanie kodów) -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.ParserApp"
+        android:usesCleartextTraffic="true">
+
+        <!-- Główna aktywność aplikacji -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.ParserApp">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Aktywność konfiguracji serwera -->
+        <activity
+            android:name=".ConfigActivity"
+            android:exported="false"
+            android:label="@string/config_title"
+            android:parentActivityName=".MainActivity" />
+
+    </application>
+
+</manifest>

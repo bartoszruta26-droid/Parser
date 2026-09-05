@@ -1,0 +1,45 @@
+# Przykładowy plik konfiguracyjny Android App
+# Skopiuj ten plik jako 'android-app-config' i dostosuj do swojego środowiska.
+# UWAGA: Nie wersjonuj pliku z danymi wdrożeniowymi w repozytorium Git.
+
+# Adres hosta lub nazwa DNS serwera
+# Może to być adres IP, nazwa domenowa lub localhost
+SERVER_HOST=192.168.1.100
+
+# Port serwera komunikacyjnego
+# Domyślnie 8080 dla HTTP, 443 dla HTTPS
+SERVER_PORT=8080
+
+# Protokół komunikacji
+# Dozwolone wartości: http, https
+SERVER_PROTOCOL=http
+
+# Bazowa ścieżka API (jeśli serwer ją stosuje)
+# Pozostaw puste, jeśli API jest dostępne bezpośrednio pod root
+API_BASE_PATH=/api/v1
+
+# Nazwa profilu środowiskowego
+# Dozwolone wartości: dev, test, prod
+ENVIRONMENT_PROFILE=dev
+
+# Limit czasu połączenia w milisekundach
+# Czas oczekiwania na odpowiedź serwera przed timeoutem
+CONNECTION_TIMEOUT_MS=5000
+
+# Limit czasu odczytu w milisekundach
+# Czas oczekiwania na dane podczas transmisji
+READ_TIMEOUT_MS=10000
+
+# Tryb zaufania dla certyfikatów SSL/TLS
+# true - zezwala na certyfikaty self-signed (tylko dla środowisk dev/test)
+# false - wymaga valid certyfikatów (wymagane dla produkcji)
+ALLOW_SELF_SIGNED_CERTS=true
+
+# Opcjonalnie: Token autoryzacyjny (jeśli wymagany przez serwer)
+# AUTH_TOKEN=
+
+# Opcjonalnie: Interwał odświeżania statusu w milisekundach
+REFRESH_INTERVAL_MS=5000
+
+# Opcjonalnie: Włącz/wyłącz logowanie debugowania
+DEBUG_LOGGING=true
