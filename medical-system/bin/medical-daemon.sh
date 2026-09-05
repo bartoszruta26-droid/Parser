@@ -547,28 +547,35 @@ start_daemon() {
     
     # Puść w tło jeśli daemonize
     if [[ ${DAEMONIZE:-false} == "true" ]]; then
-        # Zdeamonizuj proces - fork do tła
-        (
-            # Odłącz od terminala
-            setsid bash -c "
-                cd /
-                exec 0</dev/null
-                exec 1>/dev/null
-                exec 2>/dev/null
-                
-                # Zapisz nowy PID po forku
-                echo \$\$ > '$PID_FILE'
-                
-                # Główna pętla w procesie potomnym
-                trap 'kill \$\$' INT TERM
-                while true; do
-                    sleep \"$POLL_INTERVAL\"
-                done
-            " &
-        )
+        # Zdeamonizuj proces - fork do tła z setsid
+        nohup setsid bash -c "
+            cd /
+            exec 0</dev/null
+            
+            # Przekieruj stdout i stderr do pliku logów
+            exec 1>>'$LOG_FILE'
+            exec 2>>'$LOG_FILE'
+            
+            # Zapisz nowy PID po forku
+            echo \$\$ > '$PID_FILE'
+            
+            # Załaduj konfigurację i uruchom główną pętlę w procesie potomnym
+            export DAEMONIZE=true
+            exec '$SCRIPT_DIR/medical-daemon.sh' run-foreground
+        " >/dev/null 2>&1 &
+        
         local child_pid=$!
         disown $child_pid 2>/dev/null || true
-        echo "Daemon uruchomiony w tle (PID: $child_pid)"
+        
+        # Poczekaj chwilę aż child zapisze swoje PID
+        sleep 0.5
+        
+        if [[ -f "$PID_FILE" ]]; then
+            local actual_pid=$(cat "$PID_FILE")
+            echo "Daemon uruchomiony w tle (PID: $actual_pid)"
+        else
+            echo "Daemon uruchomiony w tle (PID: $child_pid)"
+        fi
         exit 0
     fi
     
@@ -702,7 +709,7 @@ declare -A CMD_ARGS
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        start|stop|restart|status|command)
+        start|stop|restart|status|command|run-foreground)
             ACTION="$1"
             shift
             ;;
@@ -748,6 +755,15 @@ done
 
 # Wykonaj akcję
 case "$ACTION" in
+    run-foreground)
+        # Wewnętrzny tryb dla zmonetyzowanego procesu - pomijaj fork, uruchom pętlę bezpośrednio
+        load_config
+        start_socket_server
+        detect_usb_sensors
+        detect_ethernet_sensors
+        trap cleanup EXIT INT TERM
+        process_socket_requests
+        ;;
     start)
         start_daemon
         ;;
