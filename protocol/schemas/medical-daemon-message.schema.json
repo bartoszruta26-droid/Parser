@@ -77,7 +77,7 @@
       ]
     },
     "payload": {
-      "type": "object",
+      "type": ["object", "null"],
       "description": "Command-specific business payload. Keep frontend logic thin; validate in daemon/backend modules.",
       "oneOf": [
         {
@@ -100,6 +100,12 @@
         },
         {
           "$ref": "#/$defs/SwarmEffectorPayload"
+        },
+        {
+          "description": "Empty payload for control commands (ping, status, shutdown, backend.job, swarm.forward)",
+          "type": "object",
+          "properties": {},
+          "additionalProperties": false
         }
       ]
     },

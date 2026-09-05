@@ -112,9 +112,28 @@ JSON
 }
 
 # Send response to client
+# Validates and sanitizes request ID to prevent path traversal attacks
+# Returns 0 if valid, 1 if invalid
+validate_request_id() {
+  local req_id="$1"
+  # Reject if empty, contains path separators, or contains traversal sequences
+  if [[ -z "$req_id" ]] || [[ "$req_id" == *"/"* ]] || [[ "$req_id" == *".."* ]]; then
+    log_error "Invalid request_id format: $req_id"
+    return 1
+  fi
+  return 0
+}
+
 send_response() {
   local request_id="$1"
   local body="$2"
+  
+  # Security Check: Validate request_id before constructing path
+  if ! validate_request_id "$request_id"; then
+    log_error "Rejected response due to unsafe request_id"
+    return 1
+  fi
+
   local response_file="$RESPONSE_DIR/${request_id}.json"
 
   printf '%s\n' "$body" > "$response_file"
@@ -135,15 +154,48 @@ handle_status() {
   send_response "$request_id" "$(json_response "$request_id" "ok" "STATUS" "Daemon is running" "$payload")"
 }
 
-# Append event to queue file
+# Validate JSON payload - returns 0 if valid, 1 if invalid
+validate_json() {
+  local json="$1"
+  # Use jq to validate JSON syntax
+  if echo "$json" | jq . >/dev/null 2>&1; then
+    return 0
+  else
+    return 1
+  fi
+}
+
+# Encrypt sensitive data using openssl (AES-256-CBC)
+encrypt_payload() {
+  local payload="$1"
+  local key="${ENCRYPTION_KEY:-default_key_change_in_production}"
+  
+  echo -n "$payload" | openssl enc -aes-256-cbc -pbkdf2 -iter 100000 -salt -pass pass:"$key" -base64 -A 2>/dev/null || echo -n "$payload"
+}
+
+# Append event to queue file with validation and optional encryption
 append_event() {
   local event_file="$1"
   local source="$2"
   local command="$3"
   local payload="$4"
-
+  local should_encrypt="${5:-false}"
+  
+  # Validate that payload is valid JSON before appending
+  if ! validate_json "$payload"; then
+    log "ERROR" "Invalid JSON payload for command=$command from source=$source"
+    return 1
+  fi
+  
+  # Apply encryption if required
+  local final_payload="$payload"
+  if [[ "$should_encrypt" == "true" ]]; then
+    final_payload="\"$(encrypt_payload "$payload")\""
+    log "DEBUG" "Encrypted payload for $command (encrypted_size=${#final_payload})"
+  fi
+  
   printf '{"timestamp_utc":"%s","node":"%s","role":"%s","source":"%s","command":"%s","payload":%s}\n' \
-    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(json_escape "$RPI_NODE_NAME")" "$(json_escape "$RPI_NODE_ROLE")" "$(json_escape "$source")" "$(json_escape "$command")" "$payload" >> "$event_file"
+    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(json_escape "$RPI_NODE_NAME")" "$(json_escape "$RPI_NODE_ROLE")" "$(json_escape "$source")" "$(json_escape "$command")" "$final_payload" >> "$event_file"
 }
 
 # Handle patient data (podmiotowe i przedmiotowe dane pacjenta)
@@ -152,9 +204,19 @@ handle_patient_data() {
   local source="$2"
   local payload="$3"
   
-  append_event "$PATIENT_DATA_QUEUE" "$source" "patient.data" "$payload"
-  log "INFO" "Accepted patient data request_id=$request_id source=$source payload_bytes=${#payload}"
-  send_response "$request_id" "$(json_response "$request_id" "accepted" "PATIENT_DATA" "Patient data accepted" "{\"queued\":true,\"event_file\":\"$(json_escape "$PATIENT_DATA_QUEUE")\"}")"
+  # Honor encryption setting for sensitive patient data
+  local encrypt_flag="false"
+  if [[ "${PATIENT_DATA_ENCRYPTION:-false}" == "true" ]]; then
+    encrypt_flag="true"
+  fi
+  
+  if ! append_event "$PATIENT_DATA_QUEUE" "$source" "patient.data" "$payload" "$encrypt_flag"; then
+    send_response "$request_id" "$(json_response "$request_id" "rejected" "PATIENT_DATA" "Invalid JSON payload" "{}")"
+    return 1
+  fi
+  
+  log "INFO" "Accepted patient data request_id=$request_id source=$source payload_bytes=${#payload} encrypted=$encrypt_flag"
+  send_response "$request_id" "$(json_response "$request_id" "accepted" "PATIENT_DATA" "Patient data accepted" "{\"queued\":true,\"event_file\":\"$(json_escape "$PATIENT_DATA_QUEUE")\",\"encrypted\":$encrypt_flag}")"
 }
 
 # Handle biosensor data (dane z czujników biosensor)
@@ -340,6 +402,39 @@ handle_command() {
   write_state
 }
 
+# Retention policy enforcement - removes old events from queue files
+enforce_retention() {
+  local queue_file="$1"
+  local retention_days="$2"
+  
+  if [[ ! -f "$queue_file" ]]; then
+    return 0
+  fi
+  
+  local cutoff_date=$(date -u -d "$retention_days days ago" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u +%Y-%m-%dT%H:%M:%SZ)
+  local temp_file="${queue_file}.tmp"
+  local removed_count=0
+  
+  # Filter out entries older than retention period
+  while IFS= read -r line; do
+    local entry_timestamp=$(echo "$line" | jq -r '.timestamp_utc' 2>/dev/null)
+    if [[ -n "$entry_timestamp" ]] && [[ "$entry_timestamp" > "$cutoff_date" ]]; then
+      echo "$line" >> "$temp_file"
+    else
+      ((removed_count++))
+    fi
+  done < "$queue_file"
+  
+  if [[ -f "$temp_file" ]]; then
+    mv "$temp_file" "$queue_file"
+    log "INFO" "Retention enforced on $queue_file: removed $removed_count entries older than $retention_days days"
+  else
+    # If all entries were removed, create empty file
+    > "$queue_file"
+    log "INFO" "Retention enforced on $queue_file: removed all $removed_count entries (all older than $retention_days days)"
+  fi
+}
+
 # Main daemon loop
 main_loop() {
   log "INFO" "Starting $APP_NAME daemon with protocol v$PROTOCOL_VERSION"
@@ -348,9 +443,22 @@ main_loop() {
   log "INFO" "Biofeedback queue: $SENSOR_BIOFEEDBACK_QUEUE"
   log "INFO" "FHIR queue: $MEDICAL_FHIR_QUEUE"
   log "INFO" "HL7 queue: $MEDICAL_HL7_QUEUE"
+  log "INFO" "Patient data retention: ${PATIENT_DATA_RETENTION_DAYS:-disabled} days"
   write_state
+  
+  local last_retention_run=0
+  local retention_interval=3600  # Run retention check every hour
 
   while [[ "$running" == "true" ]]; do
+    # Enforce retention policy periodically
+    local current_time=$(date +%s)
+    if [[ $((current_time - last_retention_run)) -ge $retention_interval ]]; then
+      if [[ -n "${PATIENT_DATA_RETENTION_DAYS:-}" ]] && [[ "${PATIENT_DATA_RETENTION_DAYS:-0}" -gt 0 ]]; then
+        enforce_retention "$PATIENT_DATA_QUEUE" "$PATIENT_DATA_RETENTION_DAYS"
+      fi
+      last_retention_run=$current_time
+    fi
+    
     if IFS= read -r line < "$COMMAND_FIFO"; then
       [[ -z "$line" ]] && continue
       handle_command "$line"
