@@ -7,14 +7,18 @@
 
 set -euo pipefail
 
+# Ścieżka bazowa względem lokalizacji skryptu
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BASE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
 # Konfiguracja
 DAEMON_NAME="medical-daemon"
-PID_FILE="/workspace/medical-system/run/${DAEMON_NAME}.pid"
-LOG_FILE="/workspace/medical-system/logs/${DAEMON_NAME}.log"
-SOCKET_FILE="/workspace/medical-system/run/${DAEMON_NAME}.sock"
-CONFIG_FILE="/workspace/medical-system/config/daemon.conf"
-SENSOR_DIR="/workspace/medical-system/sensors"
-DATA_DIR="/workspace/medical-system/data"
+PID_FILE="$BASE_DIR/run/${DAEMON_NAME}.pid"
+LOG_FILE="$BASE_DIR/logs/${DAEMON_NAME}.log"
+SOCKET_FILE="$BASE_DIR/run/${DAEMON_NAME}.sock"
+CONFIG_FILE="$BASE_DIR/config/daemon.conf"
+SENSOR_DIR="$BASE_DIR/sensors"
+DATA_DIR="$BASE_DIR/data"
 
 # Domyślne wartości konfiguracyjne
 POLL_INTERVAL=5
@@ -74,10 +78,38 @@ log_info()  { log "INFO" "$@"; }
 log_warn()  { log "WARN" "$@"; }
 log_error() { log "ERROR" "$@"; }
 
+# Funkcja do escape'owania specjalnych znaków JSON
+json_escape() {
+    local str="$1"
+    # Escape backslashes first, then quotes, then control characters
+    str="${str//\\/\\\\}"
+    str="${str//\"/\\\"}"
+    str="${str//$'\n'/\\n}"
+    str="${str//$'\r'/\\r}"
+    str="${str//$'\t'/\\t}"
+    echo "$str"
+}
+
 load_config() {
     if [[ -f "$CONFIG_FILE" ]]; then
         log_info "Wczytywanie konfiguracji z $CONFIG_FILE"
-        source "$CONFIG_FILE"
+        # Bezpieczne wczytywanie konfiguracji - tylko zmienne, nie wykonujemy kodu
+        while IFS='=' read -r key value; do
+            # Ignoruj komentarze i puste linie
+            [[ "$key" =~ ^[[:space:]]*# ]] && continue
+            [[ -z "$key" ]] && continue
+            
+            # Usuń białe znaki
+            key=$(echo "$key" | xargs)
+            value=$(echo "$value" | xargs)
+            
+            # Eksportuj tylko znane zmienne
+            case "$key" in
+                POLL_INTERVAL|MAX_SENSORS|BUFFER_SIZE|LOG_LEVEL|DAEMONIZE)
+                    export "$key=$value"
+                    ;;
+            esac
+        done < "$CONFIG_FILE"
     else
         log_warn "Plik konfiguracyjny nie istnieje, używam domyślnych wartości"
     fi
@@ -104,6 +136,15 @@ cleanup() {
         rm -f "$SOCKET_FILE"
     fi
     
+    # Zabierz proces socat jeśli istnieje
+    if [[ -f "${SOCKET_FILE}.pid" ]]; then
+        local socat_pid=$(cat "${SOCKET_FILE}.pid")
+        if kill -0 "$socat_pid" 2>/dev/null; then
+            kill "$socat_pid" 2>/dev/null || true
+        fi
+        rm -f "${SOCKET_FILE}.pid"
+    fi
+    
     # Usuń PID file
     rm -f "$PID_FILE"
     
@@ -118,6 +159,7 @@ cleanup() {
 declare -A SENSORS_ID
 declare -A SENSORS_TYPE      # usb, ethernet
 declare -A SENSORS_PORT      # /dev/ttyUSB0, 192.168.1.100
+declare -A SENSORS_ETH_PORT  # port dla sensorów Ethernet (domyślnie 80)
 declare -A SENSORS_STATUS    # connected, disconnected, error
 declare -A SENSORS_LAST_READ # timestamp ostatniego odczytu
 declare -A SENSORS_DATA      # ostatnie dane z sensora
@@ -137,11 +179,22 @@ register_sensor() {
     SENSORS_ID[$id]="$id"
     SENSORS_TYPE[$id]="$type"
     SENSORS_PORT[$id]="$port"
+    
+    # Dla sensorów Ethernet, wyciągnij port z adresu jeśli podany jako IP:PORT
+    if [[ "$type" == "ethernet" ]]; then
+        if [[ "$port" =~ ^([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+):([0-9]+)$ ]]; then
+            SENSORS_PORT[$id]="${BASH_REMATCH[1]}"
+            SENSORS_ETH_PORT[$id]="${BASH_REMATCH[2]}"
+        else
+            SENSORS_ETH_PORT[$id]=80
+        fi
+    fi
+    
     SENSORS_STATUS[$id]="connected"
     SENSORS_LAST_READ[$id]=$(date +%s)
     SENSORS_DATA[$id]=""
     
-    ((sensor_count++))
+    sensor_count=$((sensor_count + 1))
     log_info "Zarejestrowano sensor: ID=$id, TYPE=$type, PORT=$port"
     return 0
 }
@@ -153,11 +206,12 @@ unregister_sensor() {
         unset SENSORS_ID[$id]
         unset SENSORS_TYPE[$id]
         unset SENSORS_PORT[$id]
+        unset SENSORS_ETH_PORT[$id]
         unset SENSORS_STATUS[$id]
         unset SENSORS_LAST_READ[$id]
         unset SENSORS_DATA[$id]
         
-        ((sensor_count--))
+        sensor_count=$((sensor_count - 1))
         log_info "Wyrejestrowano sensor: ID=$id"
         return 0
     fi
@@ -247,14 +301,29 @@ read_usb_sensor() {
 read_ethernet_sensor() {
     local sensor_id="$1"
     local ip="${SENSORS_PORT[$sensor_id]}"
+    local port="${SENSORS_ETH_PORT[$sensor_id]:-80}"
+    
+    # Walidacja adresu IP - dozwolone tylko znaki alfanumeryczne i kropki
+    if [[ ! "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        log_error "Nieprawidłowy adres IP sensora: $ip"
+        SENSORS_STATUS[$sensor_id]="error"
+        return 1
+    fi
+    
+    # Walidacja portu - tylko liczby
+    if [[ ! "$port" =~ ^[0-9]+$ ]] || [[ "$port" -lt 1 ]] || [[ "$port" -gt 65535 ]]; then
+        log_error "Nieprawidłowy port sensora: $port"
+        SENSORS_STATUS[$sensor_id]="error"
+        return 1
+    fi
     
     # Spróbuj pobrać dane przez HTTP (typowe dla Pico W)
     local data
-    data=$(curl -s --connect-timeout 2 "http://$ip/data" 2>/dev/null || echo "")
+    data=$(curl -s --connect-timeout 2 "http://$ip:$port/data" 2>/dev/null || echo "")
     
     if [[ -z "$data" ]]; then
-        # Spróbuj przez TCP socket
-        data=$(timeout 2 bash -c "echo 'GET_DATA' | nc -w 1 $ip 8080 2>/dev/null" || echo "")
+        # Spróbuj przez TCP socket (bez bash -c, używamy nc bezpośrednio)
+        data=$(echo 'GET_DATA' | nc -w 1 "$ip" "$port" 2>/dev/null || echo "")
     fi
     
     if [[ -n "$data" ]]; then
@@ -314,30 +383,14 @@ handle_client_request() {
                 else
                     sensors_json+=","
                 fi
-                sensors_json+=$(cat <<EOF
-{
-    "id": "$sensor_id",
-    "type": "${SENSORS_TYPE[$sensor_id]}",
-    "port": "${SENSORS_PORT[$sensor_id]}",
-    "status": "${SENSORS_STATUS[$sensor_id]}",
-    "last_read": ${SENSORS_LAST_READ[$sensor_id]},
-    "data": "${SENSORS_DATA[$sensor_id]}"
-}
-EOF
-)
+                # Escape dane z sensora przed wstawieniem do JSON
+                local escaped_data
+                escaped_data=$(json_escape "${SENSORS_DATA[$sensor_id]}")
+                sensors_json+="{\"id\":\"$sensor_id\",\"type\":\"${SENSORS_TYPE[$sensor_id]}\",\"port\":\"${SENSORS_PORT[$sensor_id]}\",\"status\":\"${SENSORS_STATUS[$sensor_id]}\",\"last_read\":${SENSORS_LAST_READ[$sensor_id]},\"data\":\"$escaped_data\"}"
             done
             sensors_json+="]"
             
-            response=$(cat <<EOF
-{
-    "status": "ok",
-    "daemon": "$DAEMON_NAME",
-    "sensor_count": $sensor_count,
-    "sensors": $sensors_json,
-    "timestamp": $(date +%s)
-}
-EOF
-)
+            response="{\"status\":\"ok\",\"daemon\":\"$DAEMON_NAME\",\"sensor_count\":$sensor_count,\"sensors\":$sensors_json,\"timestamp\":$(date +%s)}"
             ;;
         
         sensor.read)
@@ -350,15 +403,9 @@ EOF
                     ethernet) read_ethernet_sensor "$target_sensor" || true ;;
                 esac
                 
-                response=$(cat <<EOF
-{
-    "status": "ok",
-    "sensor_id": "$target_sensor",
-    "data": "${SENSORS_DATA[$target_sensor]}",
-    "timestamp": ${SENSORS_LAST_READ[$target_sensor]}
-}
-EOF
-)
+                local escaped_data
+                escaped_data=$(json_escape "${SENSORS_DATA[$target_sensor]}")
+                response="{\"status\":\"ok\",\"sensor_id\":\"$target_sensor\",\"data\":\"$escaped_data\",\"timestamp\":${SENSORS_LAST_READ[$target_sensor]}}"
             else
                 response='{"status":"error","message":"Sensor not found"}'
             fi
@@ -407,15 +454,9 @@ EOF
         data.get)
             local target_sensor=$(echo "$request" | jq -r '.sensor_id // empty' 2>/dev/null)
             if [[ -n "$target_sensor" && -v SENSORS_ID[$target_sensor] ]]; then
-                response=$(cat <<EOF
-{
-    "status": "ok",
-    "sensor_id": "$target_sensor",
-    "data": "${SENSORS_DATA[$target_sensor]}",
-    "timestamp": ${SENSORS_LAST_READ[$target_sensor]}
-}
-EOF
-)
+                local escaped_data
+                escaped_data=$(json_escape "${SENSORS_DATA[$target_sensor]}")
+                response="{\"status\":\"ok\",\"sensor_id\":\"$target_sensor\",\"data\":\"$escaped_data\",\"timestamp\":${SENSORS_LAST_READ[$target_sensor]}}"
             else
                 response='{"status":"error","message":"Sensor not found"}'
             fi
@@ -443,11 +484,21 @@ start_socket_server() {
     # Usuń stary socket jeśli istnieje
     rm -f "$SOCKET_FILE"
     
-    # Utwórz socket UNIX
-    exec 3<>"$SOCKET_FILE"
-    chmod 660 "$SOCKET_FILE"
-    
-    log_info "Serwer socket gotowy"
+    # Utwórz prawdziwy socket UNIX za pomocą socat w tle
+    # Socket będzie nasłuchiwał połączeń
+    if command -v socat &>/dev/null; then
+        # Użyj socat do utworzenia prawdziwego AF_UNIX socket
+        socat UNIX-LISTEN:"$SOCKET_FILE",fork,mode=660 SYSTEM:"cat >&3 <&3" 2>/dev/null &
+        local socat_pid=$!
+        echo "$socat_pid" > "${SOCKET_FILE}.pid"
+        chmod 660 "$SOCKET_FILE"
+        log_info "Serwer socket gotowy (socat PID: $socat_pid)"
+    else
+        # Fallback: prosty socket przez mkfifo + netcat
+        log_warn "socat nieznaleziony, używam fallback z mkfifo"
+        mkfifo -m 660 "$SOCKET_FILE" 2>/dev/null || true
+        log_info "Serwer socket gotowy (tryb fallback)"
+    fi
 }
 
 process_socket_requests() {
@@ -496,10 +547,32 @@ start_daemon() {
     
     # Puść w tło jeśli daemonize
     if [[ ${DAEMONIZE:-false} == "true" ]]; then
-        exec >/dev/null 2>&1 </dev/null
+        # Zdeamonizuj proces - fork do tła
+        (
+            # Odłącz od terminala
+            setsid bash -c "
+                cd /
+                exec 0</dev/null
+                exec 1>/dev/null
+                exec 2>/dev/null
+                
+                # Zapisz nowy PID po forku
+                echo \$\$ > '$PID_FILE'
+                
+                # Główna pętla w procesie potomnym
+                trap 'kill \$\$' INT TERM
+                while true; do
+                    sleep \"$POLL_INTERVAL\"
+                done
+            " &
+        )
+        local child_pid=$!
+        disown $child_pid 2>/dev/null || true
+        echo "Daemon uruchomiony w tle (PID: $child_pid)"
+        exit 0
     fi
     
-    # Główna pętla
+    # Główna pętla (tryb foreground)
     trap cleanup EXIT INT TERM
     process_socket_requests
 }
