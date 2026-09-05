@@ -1,0 +1,25 @@
+{
+  "protocol": "1",
+  "request_id": "biosensor-001-20260105-143022",
+  "source": "biosensor-device",
+  "command": "biosensor.data",
+  "payload": {
+    "sensor_id": "ecg-device-01",
+    "sensor_type": "ecg",
+    "value": 1.234,
+    "unit": "mV",
+    "timestamp": "2026-01-05T14:30:22.123Z",
+    "sample_rate": 250,
+    "quality": 95,
+    "lead": "II",
+    "patient_id": "PAT-2026-00123"
+  },
+  "meta": {
+    "timestamp_utc": "2026-01-05T14:30:22Z",
+    "correlation_id": "ecg-session-001",
+    "content_type": "application/json",
+    "schema": "medical-daemon-message",
+    "patient_id": "PAT-2026-00123",
+    "encryption": false
+  }
+}
