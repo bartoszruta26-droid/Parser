@@ -106,7 +106,11 @@ function json_error(string $code, string $message, int $httpCode = 400): void
 
 function send_daemon_command(string $command, string $payload, array $config): int
 {
-    $allowedCommands = ['ping', 'status', 'frontend.event', 'shutdown'];
+    $allowedCommands = [
+        'ping', 'status', 'frontend.event', 'shutdown',
+        'sensor.list', 'sensor.read', 'sensor.add', 'sensor.remove',
+        'effector.list', 'effector.read', 'effector.write', 'effector.state'
+    ];
     if (!in_array($command, $allowedCommands, true)) {
         json_error('INVALID_COMMAND', 'Nieobsługiwana komenda WebUI: ' . $command);
         return 64;
