@@ -1,0 +1,22 @@
+# Medical Daemon CLI Configuration
+# Copy this file to /etc/medical-daemon/cli.conf or set CLI_CONFIG environment variable
+
+# Runtime directory (must match daemon configuration)
+RUN_DIR="/tmp/medical-daemon"
+COMMAND_FIFO="${RUN_DIR}/commands.fifo"
+RESPONSE_DIR="${RUN_DIR}/responses"
+
+# Timeout settings
+REQUEST_TIMEOUT_SECONDS="10"
+
+# Display settings
+USE_COLOR="true"
+DEFAULT_SOURCE="cli"
+
+# Queue files (for reference - used by daemon)
+PATIENT_DATA_QUEUE="${RUN_DIR}/patient-data.jsonl"
+SENSOR_BIOSENSOR_QUEUE="${RUN_DIR}/biosensor-events.jsonl"
+SENSOR_BIOFEEDBACK_QUEUE="${RUN_DIR}/biofeedback-events.jsonl"
+MEDICAL_FHIR_QUEUE="${RUN_DIR}/fhir-messages.jsonl"
+MEDICAL_HL7_QUEUE="${RUN_DIR}/hl7-messages.jsonl"
+SWARM_QUEUE="${RUN_DIR}/swarm-events.jsonl"
