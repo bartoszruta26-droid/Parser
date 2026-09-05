@@ -130,7 +130,11 @@ write_command_fifo() {
   local deadline="$5"
   local writer_pid
 
-  (printf '%s|%s|%s|%s\n' "$request_id" "$source" "$command" "$payload" > "$COMMAND_FIFO") &
+  # Base64-encode payload to safely handle multiline JSON
+  local encoded_payload
+  encoded_payload=$(printf '%s' "$payload" | base64 -w 0)
+
+  (printf '%s|%s|%s|%s\n' "$request_id" "$source" "$command" "$encoded_payload" > "$COMMAND_FIFO") &
   writer_pid=$!
 
   while kill -0 "$writer_pid" 2>/dev/null; do
@@ -272,62 +276,115 @@ QUIET="false"
 FROM_FILE="false"
 SOURCE="cli"
 TIMEOUT="$REQUEST_TIMEOUT_SECONDS"
+COMMAND=""
+PAYLOAD_FILE_ARG=""
 
-# Parsowanie argumentów ogólnych
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    -h|--help)
-      usage
-      exit 0
-      ;;
-    -v|--verbose)
-      VERBOSE="true"
-      shift
-      ;;
-    --no-color)
-      USE_COLOR="false"
-      shift
-      ;;
-    -q|--quiet)
-      QUIET="true"
-      shift
-      ;;
-    -t|--timeout)
-      TIMEOUT="$2"
-      shift 2
-      ;;
-    -f|--file)
-      FROM_FILE="true"
-      shift
-      ;;
-    -s|--source)
-      SOURCE="$2"
-      shift 2
-      ;;
-    -*)
-      # To może być komenda
-      break
-      ;;
-    *)
-      # Koniec opcji
-      break
-      ;;
-  esac
-done
+# Parsowanie argumentów - obsługa opcji przed i po komendzie
+# Najpierw znajdziemy komendę, potem parsujemy resztę
+parse_arguments() {
+  local found_command="false"
+  
+  while [[ $# -gt 0 ]]; do
+    if [[ "$found_command" == "false" ]]; then
+      case "$1" in
+        -h|--help)
+          usage
+          exit 0
+          ;;
+        -v|--verbose)
+          VERBOSE="true"
+          shift
+          ;;
+        --no-color)
+          USE_COLOR="false"
+          shift
+          ;;
+        -q|--quiet)
+          QUIET="true"
+          shift
+          ;;
+        -t|--timeout)
+          TIMEOUT="$2"
+          shift 2
+          ;;
+        -f|--file)
+          FROM_FILE="true"
+          PAYLOAD_FILE_ARG="$2"
+          shift 2
+          ;;
+        -s|--source)
+          SOURCE="$2"
+          shift 2
+          ;;
+        -*)
+          # Nieznana opcja przed komendą - traktuj jako błąd
+          echo "Unknown option before command: $1" >&2
+          exit 64
+          ;;
+        *)
+          # To jest komenda
+          COMMAND="$1"
+          found_command="true"
+          shift
+          ;;
+      esac
+    else
+      # Po komendzie - parsuj opcje lub payload
+      case "$1" in
+        -v|--verbose)
+          VERBOSE="true"
+          shift
+          ;;
+        --no-color)
+          USE_COLOR="false"
+          shift
+          ;;
+        -q|--quiet)
+          QUIET="true"
+          shift
+          ;;
+        -t|--timeout)
+          TIMEOUT="$2"
+          shift 2
+          ;;
+        -f|--file)
+          FROM_FILE="true"
+          PAYLOAD_FILE_ARG="$2"
+          shift 2
+          ;;
+        -s|--source)
+          SOURCE="$2"
+          shift 2
+          ;;
+        -*)
+          # Nieznana opcja po komendzie
+          echo "Unknown option: $1" >&2
+          exit 64
+          ;;
+        *)
+          # To jest payload (jeśli jeszcze nie ustawiony z -f)
+          if [[ -z "$PAYLOAD_FILE_ARG" ]]; then
+            PAYLOAD_FILE_ARG="$1"
+          fi
+          shift
+          ;;
+      esac
+    fi
+  done
+}
+
+parse_arguments "$@"
 
 # Sprawdzenie komendy
-if [[ $# -lt 1 ]]; then
+if [[ -z "$COMMAND" ]]; then
   usage
   exit 64
 fi
 
-COMMAND="$1"
-shift
-
 # Pobranie payloadu
 PAYLOAD=""
-if [[ $# -gt 0 ]]; then
-  PAYLOAD="$(get_payload "$1" "$FROM_FILE")"
+if [[ -n "$PAYLOAD_FILE_ARG" ]]; then
+  PAYLOAD="$(get_payload "$PAYLOAD_FILE_ARG" "$FROM_FILE")"
 fi
 
 # Walidacja JSON dla komend z danymi

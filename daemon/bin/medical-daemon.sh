@@ -342,13 +342,20 @@ handle_shutdown() {
 # Main command handler
 handle_command() {
   local raw_line="$1"
-  local request_id command source payload
+  local request_id command source encoded_payload payload
 
-  IFS='|' read -r request_id source command payload <<< "$raw_line"
+  IFS='|' read -r request_id source command encoded_payload <<< "$raw_line"
   request_id="${request_id:-missing}"
   source="${source:-unknown}"
   command="${command:-unknown}"
-  payload="${payload:-}"
+  
+  # Decode base64-encoded payload (sent by CLI to safely handle multiline JSON)
+  if [[ -n "$encoded_payload" ]]; then
+    payload=$(printf '%s' "$encoded_payload" | base64 -d 2>/dev/null || echo "")
+  else
+    payload=""
+  fi
+  
   last_command="$source:$command"
 
   case "$command" in
