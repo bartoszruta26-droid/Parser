@@ -1,0 +1,29 @@
+{
+  "protocol": "1",
+  "request_id": "patient-001-20260105-143000",
+  "source": "webui",
+  "command": "patient.data",
+  "payload": {
+    "patient_id": "PAT-2026-00123",
+    "data_type": "podmiotowe",
+    "timestamp": "2026-01-05T14:30:00Z",
+    "provider": "Dr Jan Kowalski",
+    "data": {
+      "chief_complaint": "Ból w klatce piersiowej",
+      "history_present_illness": "Ból pojawił się 2 godziny temu, nasila się przy wysiłku",
+      "past_medical_history": ["nadciśnienie tętnicze", "cukrzyca typu 2"],
+      "medications": ["Metformin 500mg 2x dziennie", "Amlodipine 5mg 1x dziennie"],
+      "allergies": ["penicylina"],
+      "family_history": ["choroba wieńcowa u ojca"],
+      "social_history": "Palenie: 10 papierosów/dzień przez 20 lat"
+    }
+  },
+  "meta": {
+    "timestamp_utc": "2026-01-05T14:30:00Z",
+    "correlation_id": "visit-2026-001",
+    "content_type": "application/json",
+    "schema": "medical-daemon-message",
+    "patient_id": "PAT-2026-00123",
+    "encryption": false
+  }
+}

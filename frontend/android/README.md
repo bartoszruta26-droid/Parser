@@ -1,201 +1,124 @@
-# Android App - Szkielet aplikacji mobilnej
+# Aplikacja Android - Medical Daemon Client
 
-## 1. Cel i przeznaczenie
+Aplikacja Android obsługująca protokół komunikacyjny z daemonem zarządzającym danymi medycznymi.
 
-Ten katalog zawiera szkielet aplikacji Android, która stanowi frontend mobilny dla systemu. Aplikacja umożliwia obsługę daemona z poziomu telefonu lub tabletu z systemem Android.
+## Funkcjonalności
 
-### Typowe zastosowania:
-- szybki podgląd statusu daemona,
-- zdalne uruchomienie funkcji systemu,
-- otrzymywanie powiadomień,
-- obsługa w terenie,
-- konfiguracja prostych parametrów,
-- skanowanie kodów, identyfikatorów lub etykiet (jeśli projekt docelowy tego wymaga).
+### Obsługiwane typy danych:
+1. **Dane pacjenta** (podmiotowe i przedmiotowe)
+   - ID pacjenta
+   - Źródło danych (lekarz, pielęgniarka)
+   - Główne dolegliwości
+   - Historia chorób
+   - Leki
+   - Alergie
+   - Dowolne dodatkowe pola (extensible)
 
-## 2. Architektura
+2. **Dane Biosensora**
+   - Typy sensorów: ECG, EEG, EMG, EOG, PPG, SpO2, temperatura, wilgotność, ciśnienie, akcelerometr, żyroskop
+   - Wartość pomiaru
+   - Jednostka
+   - Częstotliwość próbkowania
+   - Jakość sygnału
+   - Dowolne dodatkowe parametry (extensible)
 
-Aplikacja Android jest **osobnym frontendem**, który komunikuje się z daemonem przez oficjalny interfejs systemu. Nie modyfikuje bezpośrednio plików wewnętrznych bez uzgodnionego protokołu.
+3. **Dane Biofeedback**
+   - Typy: HRV, GSR, temperatura, respiration, fale mózgowe (alpha, beta, theta, delta)
+   - Wartość parametru
+   - Jednostka
+   - ID sesji treningowej
+   - Wartość docelowa
+   - Postęp (%)
+   - Dowolne dodatkowe parametry (extensible)
 
-### Kluczowe założenia:
-- Aplikacja **nie ma zaszytego na stałe adresu usługi**.
-- Adres serwera, port, protokół i ścieżkę bazową API odczytuje z pliku konfiguracyjnego.
-- Serwer, z którym łączy się aplikacja, jest **podaplikacją** tego repozytorium.
-- Aplikacja może pracować z różnymi instancjami środowiska (dev, test, prod, Raspberry Pi).
+### Architektura extensibility:
+- Klasa `MedicalMessage` obsługuje dowolną liczbę pól w payload poprzez:
+  - `Map<String, Object>` dla danych pacjenta
+  - `Map<String, Object>` dla dodatkowych parametrów sensorów
+  - Metodę `addPayloadField()` dla dowolnych rozszerzeń
+- Łatwe dodawanie nowych typów danych bez modyfikacji istniejącego kodu
 
-## 3. Struktura katalogów
-
-```
-frontend/android/
-├── README.md                  # Ten plik
-├── android-app-config.example # Przykładowy plik konfiguracyjny
-├── app/                       # Kod źródłowy aplikacji (szkielet)
-│   ├── src/
-│   │   └── main/
-│   │       ├── java/          # Kod Java/Kotlin
-│   │       ├── res/           # Zasoby aplikacji
-│   │       └── AndroidManifest.xml
-│   ├── build.gradle           # Konfiguracja budowania
-│   └── proguard-rules.pro     # Reguły ProGuard
-├── gradle/                    # Narzędzia Gradle
-│   └── wrapper/
-├── build.gradle               # Główny plik build.gradle
-├── settings.gradle            # Ustawienia projektu
-└── gradle.properties          # Właściwości Gradle
-```
-
-## 4. Konfiguracja
-
-Plik `android-app-config.example` zawiera przykładową konfigurację, którą należy skopiować i dostosować do środowiska wdrożeniowego.
-
-### Zawartość pliku konfiguracyjnego:
-
-```properties
-# Adres hosta lub nazwa DNS serwera
-SERVER_HOST=192.168.1.100
-
-# Port serwera
-SERVER_PORT=8080
-
-# Protokół komunikacji (HTTP lub HTTPS)
-SERVER_PROTOCOL=http
-
-# Bazowa ścieżka API (jeśli serwer ją stosuje)
-API_BASE_PATH=/api/v1
-
-# Nazwa profilu środowiskowego (dev, test, prod)
-ENVIRONMENT_PROFILE=dev
-
-# Limit czasu połączenia w milisekundach
-CONNECTION_TIMEOUT_MS=5000
-
-# Tryb zaufania dla certyfikatów (true dla środowisk lokalnych z self-signed certs)
-ALLOW_SELF_SIGNED_CERTS=true
-```
-
-### Walidacja konfiguracji:
-
-Aplikacja powinna walidować konfigurację przy starcie i prezentować czytelny komunikat, jeżeli:
-- serwer z pliku konfiguracyjnego jest niedostępny,
-- konfiguracja jest niepoprawna,
-- wersja API jest niezgodna z oczekiwaną.
-
-**Nie należy używać ukrytych wartości domyślnych**, które mogłyby przypadkowo skierować aplikację na niewłaściwy serwer.
-
-## 5. Komunikacja z daemonem
-
-Aplikacja komunikuje się z daemonem poprzez **serwer-podaplikację**, który wskazuje w pliku konfiguracyjnym.
-
-### Mechanizmy komunikacji (do wyboru w projekcie docelowym):
-- HTTP REST API,
-- WebSocket,
-- TCP socket z własnym protokołem tekstowym,
-- lokalny socket Unix (jeśli aplikacja działa na tym samym urządzeniu).
-
-### Przykładowe endpointy API:
+## Struktura projektu
 
 ```
-GET  /api/v1/status          - Pobierz status daemona
-POST /api/v1/command/ping    - Wyślij polecenie ping
-POST /api/v1/command/shutdown - Wyślij polecenie shutdown
-GET  /api/v1/events          - Pobierz zdarzenia
+app/src/main/java/com/example/parserapp/
+├── MainActivity.java          # Główna aktywność z UI
+├── ConfigActivity.java        # Konfiguracja połączenia
+└── MedicalMessage.java        # Model wiadomości zgodny z protokołem
 ```
 
-## 6. Budowanie i wdrażanie
+## Protokół komunikacyjny
 
-### Wymagania:
-- Android Studio Arctic Fox lub nowsze,
-- JDK 11 lub nowsze,
-- Android SDK (API level 21 lub wyższy),
-- Gradle 7.0 lub nowsze.
+Wiadomości są wysyłane w formacie JSON zgodnym ze schematem `medical-daemon-message.schema.json`:
 
-### Kompilacja debug:
+```json
+{
+  "protocol": "1",
+  "request_id": "uuid",
+  "source": "frontend",
+  "command": "patient.data|biosensor.data|biofeedback.data",
+  "payload": { ... },
+  "meta": {
+    "timestamp_utc": "ISO8601",
+    "correlation_id": "...",
+    "patient_id": "...",
+    "encryption": false
+  }
+}
+```
+
+## Kompilacja
 
 ```bash
 cd /workspace/frontend/android
-./gradlew assembleDebug
+./build.sh
 ```
 
-### Kompilacja release:
+## Konfiguracja
 
-```bash
-./gradlew assembleRelease
+Przed pierwszym użyciem należy skonfigurować połączenie z serwerem:
+1. Otwórz menu → Konfiguracja
+2. Wprowadź adres hosta, port, protokół i ścieżkę API
+3. Zapisz konfigurację
+
+## Przykłady użycia
+
+### Wysyłanie danych pacjenta:
+```java
+Map<String, Object> data = new HashMap<>();
+data.put("chief_complaint", "Ból głowy");
+data.put("past_medical_history", jsonArray);
+
+MedicalMessage message = new MedicalMessage(
+    MedicalMessage.COMMAND_PATIENT_DATA, 
+    MedicalMessage.SOURCE_ANDROID
+);
+message.setPatientData("PAT-001", "podmiotowe", "Dr Kowalski", data);
 ```
 
-### Instalacja na urządzeniu:
+### Wysyłanie danych biosensora:
+```java
+Map<String, Object> params = new HashMap<>();
+params.put("sample_rate", 250.0);
+params.put("quality", 95.0);
 
-```bash
-adb install app/build/outputs/apk/debug/app-debug.apk
+MedicalMessage message = new MedicalMessage(
+    MedicalMessage.COMMAND_BIOSENSOR_DATA, 
+    MedicalMessage.SOURCE_BIOSENSOR
+);
+message.setBiosensorData("ecg-01", "ecg", 1.234, "mV", params);
 ```
 
-## 7. Testowanie
+### Wysyłanie danych biofeedback:
+```java
+Map<String, Object> params = new HashMap<>();
+params.put("target_value", 70.0);
+params.put("progress_percent", 78.0);
+params.put("rmssd", 42.3);
 
-### Testy jednostkowe:
-
-```bash
-./gradlew test
+MedicalMessage message = new MedicalMessage(
+    MedicalMessage.COMMAND_BIOFEEDBACK_DATA, 
+    MedicalMessage.SOURCE_BIOFEEDBACK
+);
+message.setBiofeedbackData("hrv-01", "hrv", 65.4, "ms", "SESSION-001", params);
 ```
-
-### Testy integracyjne:
-
-```bash
-./gradlew connectedAndroidTest
-```
-
-### Testy z daemonem:
-
-1. Uruchom daemona w tle.
-2. Uruchom serwer dla Android App jako podaplikację.
-3. Skonfiguruj plik `android-app-config` z adresem serwera.
-4. Uruchom aplikację na emulatorze lub urządzeniu fizycznym.
-
-## 8. Bezpieczeństwo
-
-### Zalecenia:
-- Nie przechowuj sekretów, haseł, tokenów ani kluczy prywatnych w repozytorium.
-- Plik konfiguracyjny z danymi wdrożeniowymi powinien być ignorowany przez Git (`.gitignore`).
-- W środowisku produkcyjnym używaj HTTPS z valid certyfikatami.
-- Implementuj mechanizm sesji lub tokenów dostępu.
-- Loguj istotne operacje użytkownika.
-
-## 9. Integracja z systemd
-
-Serwer dla aplikacji Android powinien być uruchamiany jako usługa systemd, podobnie jak daemon główny.
-
-Przykładowa jednostka usługi:
-
-```ini
-[Unit]
-Description=Android App Communication Server
-After=network.target parser-template-daemon.service
-
-[Service]
-Type=simple
-ExecStart=/opt/template-project/bin/android-server
-Restart=on-failure
-RestartSec=5
-User=template
-Group=template
-WorkingDirectory=/var/lib/template-project
-
-[Install]
-WantedBy=multi-user.target
-```
-
-## 10. Dalszy rozwój
-
-Ten szkielet stanowi podstawę do implementacji pełnej aplikacji Android. Projekty docelowe powinny:
-
-1. Dodać konkretny kod Java/Kotlin realizujący logikę biznesową.
-2. Zaimplementować interfejs użytkownika zgodny z wytycznymi Material Design.
-3. Dodać mechanizm autoryzacji i zarządzania sesjami.
-4. Zaimplementować obsługę powiadomień push (opcjonalnie).
-5. Dodać testy jednostkowe i integracyjne.
-6. Przygotować procedurę code signing dla wersji release.
-7. Udokumentować specyficzne wymagania projektu docelowego.
-
-## 11. Powiązane dokumenty
-
-- [readme.md](../../readme.md) - Główny dokument projektu
-- [protocol-schema.md](../../docs/protocol-schema.md) - Schemat protokołu komunikacyjnego
-- [daemon-skeleton.md](../../docs/daemon-skeleton.md) - Szkielet daemona
-- [webui-skeleton.md](../../docs/webui-skeleton.md) - Szkielet WebUI
