@@ -47,10 +47,33 @@
 #define MAX_PATH           512
 #define MAX_LINE           4096
 
+/* Kody odpowiedzi daemona - mapowanie na czytelne komunikaty */
+typedef enum {
+    RESP_OK = 0,
+    RESP_ERROR_GENERIC = 1,
+    RESP_ERROR_TIMEOUT = 2,
+    RESP_ERROR_FIFO = 3,
+    RESP_ERROR_AUTH = 4,
+    RESP_ERROR_CONFIG = 5,
+    RESP_ERROR_HARDWARE = 6,
+    RESP_WARNING = 7,
+    RESP_INFO = 8
+} ResponseCode;
+
+/* Typy komend - klasyfikacja dla autoryzacji */
+typedef enum {
+    CMD_NORMAL = 0,      /* Komendy zwykłe - bez autoryzacji */
+    CMD_SENSITIVE = 1,   /* Komendy wrażliwe - wymagają autoryzacji */
+    CMD_DANGEROUS = 2    /* Komendy niebezpieczne - wymagają potwierdzenia + autoryzacji */
+} CommandRiskLevel;
+
 typedef struct {
     char command_fifo[MAX_PATH];
     char response_dir[MAX_PATH];
     int  timeout_s;
+    gboolean auth_required;       /* Czy autoryzacja jest wymagana */
+    char operator_id[64];         /* ID zalogowanego operatora */
+    gboolean is_authenticated;    /* Stan autoryzacji */
 } Config;
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -92,6 +115,9 @@ static void config_load(Config *cfg)
     snprintf(cfg->command_fifo, MAX_PATH, "%s/commands.fifo", DEFAULT_RUN_DIR);
     snprintf(cfg->response_dir, MAX_PATH, "%s/responses",     DEFAULT_RUN_DIR);
     cfg->timeout_s = DEFAULT_TIMEOUT_S;
+    cfg->auth_required = FALSE;
+    cfg->operator_id[0] = '\0';
+    cfg->is_authenticated = FALSE;
 
     const char *path = getenv("DAEMON_CONFIG");
     if (!path || !*path) path = "/etc/parser-template/daemon.conf";
@@ -137,12 +163,85 @@ static void config_load(Config *cfg)
         if      (!strcmp(keys[i], "COMMAND_FIFO"))            strncpy(cfg->command_fifo, vals[i], MAX_PATH - 1);
         else if (!strcmp(keys[i], "RESPONSE_DIR"))            strncpy(cfg->response_dir, vals[i], MAX_PATH - 1);
         else if (!strcmp(keys[i], "REQUEST_TIMEOUT_SECONDS")) cfg->timeout_s = atoi(vals[i]);
+        else if (!strcmp(keys[i], "AUTH_REQUIRED"))           cfg->auth_required = (atoi(vals[i]) != 0 || strcmp(vals[i], "true") == 0);
+        else if (!strcmp(keys[i], "OPERATOR_ID"))             strncpy(cfg->operator_id, vals[i], sizeof(cfg->operator_id) - 1);
     }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
  * 3. Komunikacja z daemonem  (blokująca — wywoływana z wątku roboczego)
  * ═══════════════════════════════════════════════════════════════════════ */
+
+/* Mapowanie kodu odpowiedzi na czytelny komunikat */
+static const char* response_code_to_message(ResponseCode code)
+{
+    switch (code) {
+        case RESP_OK:              return "Operacja zakończona sukcesem";
+        case RESP_ERROR_GENERIC:   return "Błąd ogólny";
+        case RESP_ERROR_TIMEOUT:   return "Przekroczono czas oczekiwania";
+        case RESP_ERROR_FIFO:      return "Błąd komunikacji FIFO";
+        case RESP_ERROR_AUTH:      return "Błąd autoryzacji - brak uprawnień";
+        case RESP_ERROR_CONFIG:    return "Błąd konfiguracji";
+        case RESP_ERROR_HARDWARE:  return "Błąd sprzętowy";
+        case RESP_WARNING:         return "Ostrzeżenie";
+        case RESP_INFO:            return "Informacja";
+        default:                   return "Nieznany kod odpowiedzi";
+    }
+}
+
+/* Określenie poziomu ryzyka komendy */
+static CommandRiskLevel get_command_risk_level(const char *command)
+{
+    /* Komendy niebezpieczne - wymagają potwierdzenia + autoryzacji */
+    if (strcmp(command, "shutdown") == 0 ||
+        strcmp(command, "emergency_stop") == 0 ||
+        strcmp(command, "factory_reset") == 0 ||
+        strcmp(command, "delete_all") == 0) {
+        return CMD_DANGEROUS;
+    }
+    
+    /* Komendy wrażliwe - wymagają autoryzacji */
+    if (strcmp(command, "config.update") == 0 ||
+        strcmp(command, "config.reset") == 0 ||
+        strcmp(command, "system.restart") == 0 ||
+        strcmp(command, "diagnostic.run") == 0 ||
+        strcmp(command, "firmware.update") == 0) {
+        return CMD_SENSITIVE;
+    }
+    
+    /* Komendy zwykłe - bez autoryzacji */
+    return CMD_NORMAL;
+}
+
+/* Sprawdza czy JSON zawiera błąd i zwraca odpowiedni kod odpowiedzi */
+static ResponseCode parse_response_code(const char *json_response)
+{
+    if (!json_response) return RESP_ERROR_GENERIC;
+    
+    if (strstr(json_response, "\"error\"")) {
+        if (strstr(json_response, "timeout") || strstr(json_response, "Timeout"))
+            return RESP_ERROR_TIMEOUT;
+        if (strstr(json_response, "FIFO") || strstr(json_response, "fifo"))
+            return RESP_ERROR_FIFO;
+        if (strstr(json_response, "auth") || strstr(json_response, "Auth") ||
+            strstr(json_response, "uprawnien") || strstr(json_response, "autoryz"))
+            return RESP_ERROR_AUTH;
+        if (strstr(json_response, "config") || strstr(json_response, "Config"))
+            return RESP_ERROR_CONFIG;
+        if (strstr(json_response, "hardware") || strstr(json_response, "Hardware") ||
+            strstr(json_response, "sprzęt"))
+            return RESP_ERROR_HARDWARE;
+        return RESP_ERROR_GENERIC;
+    }
+    
+    if (strstr(json_response, "\"warning\""))
+        return RESP_WARNING;
+    
+    if (strstr(json_response, "\"info\""))
+        return RESP_INFO;
+    
+    return RESP_OK;
+}
 
 static char *daemon_send(const Config *cfg, const char *command, const char *payload)
 {
@@ -302,15 +401,25 @@ static void *worker_thread(void *arg)
     char    *pretty = pretty_json(raw);
     g_free(raw);
 
+    /* Mapowanie kodu odpowiedzi na czytelny komunikat */
+    ResponseCode resp_code = parse_response_code(pretty);
+    const char *code_msg = response_code_to_message(resp_code);
+    
     IdlePayload *p   = g_new(IdlePayload, 1);
     p->response_view = ctx->response_view;
     p->spinner       = ctx->spinner;
     p->statusbar     = ctx->statusbar;
     p->status_ctx    = ctx->status_ctx;
     p->response      = pretty;
-    p->status_msg    = strstr(pretty, "\"error\"")
-        ? g_strdup_printf("Błąd podczas: %s", ctx->command)
-        : g_strdup_printf("OK — %s", ctx->command);
+    
+    /* Status z mapowanym kodem odpowiedzi */
+    if (resp_code == RESP_OK) {
+        p->status_msg = g_strdup_printf("✓ %s — %s", code_msg, ctx->command);
+    } else if (resp_code == RESP_WARNING) {
+        p->status_msg = g_strdup_printf("⚠ %s — %s", code_msg, ctx->command);
+    } else {
+        p->status_msg = g_strdup_printf("✗ %s — %s", code_msg, ctx->command);
+    }
 
     g_idle_add(idle_update_ui, p);
     g_free(ctx->payload);
@@ -349,13 +458,14 @@ static void dispatch(Config *cfg, const char *command, const char *payload,
  * ═══════════════════════════════════════════════════════════════════════ */
 
 typedef struct {
-    Config    *cfg;
-    char       command[128];
-    GtkWidget *payload_entry;   /* NULL = komenda bez payloadu */
-    GtkWidget *response_view;
-    GtkWidget *spinner;
-    GtkWidget *statusbar;
-    guint      status_ctx;
+    Config           *cfg;
+    char              command[128];
+    GtkWidget        *payload_entry;   /* NULL = komenda bez payloadu */
+    GtkWidget        *response_view;
+    GtkWidget        *spinner;
+    GtkWidget        *statusbar;
+    guint             status_ctx;
+    GtkWidget        *main_window;     /* Główne okno - dla dialogów */
 } BtnData;
 
 static BtnData *btn_data_new(Config *cfg, const char *cmd,
@@ -363,7 +473,8 @@ static BtnData *btn_data_new(Config *cfg, const char *cmd,
                              GtkWidget *response_view,
                              GtkWidget *spinner,
                              GtkWidget *statusbar,
-                             guint status_ctx)
+                             guint status_ctx,
+                             GtkWidget *main_window)
 {
     BtnData *d       = g_new(BtnData, 1);
     d->cfg           = cfg;
@@ -374,13 +485,137 @@ static BtnData *btn_data_new(Config *cfg, const char *cmd,
     d->spinner       = spinner;
     d->statusbar     = statusbar;
     d->status_ctx    = status_ctx;
+    d->main_window   = main_window;
     return d;
+}
+
+/* Dialog autoryzacji operatora */
+static gboolean check_authorization(Config *cfg, const char *command, GtkWidget *parent)
+{
+    CommandRiskLevel risk = get_command_risk_level(command);
+    
+    /* Komendy zwykłe nie wymagają autoryzacji */
+    if (risk == CMD_NORMAL) {
+        return TRUE;
+    }
+    
+    /* Sprawdź czy operator jest już zalogowany */
+    if (cfg->is_authenticated) {
+        return TRUE;
+    }
+    
+    /* Wymagana autoryzacja - pokaż dialog */
+    const char *title = (risk == CMD_DANGEROUS) 
+        ? "⚠️ Autoryzacja wymagana - operacja niebezpieczna"
+        : "🔐 Autoryzacja wymagana";
+    
+    const char *message = (risk == CMD_DANGEROUS)
+        ? "Ta operacja może spowodować trwałe zmiany w systemie.\n\nPodaj identyfikator operatora:"
+        : "Ta operacja wymaga uprawnień operatorskich.\n\nPodaj identyfikator operatora:";
+    
+    GtkWidget *dialog = gtk_dialog_new_with_buttons(
+        title, GTK_WINDOW(parent),
+        GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT,
+        "_Anuluj", GTK_RESPONSE_CANCEL,
+        "_Autoryzuj", GTK_RESPONSE_OK,
+        NULL);
+    
+    GtkWidget *content = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+    gtk_container_set_border_width(GTK_CONTAINER(content), 15);
+    
+    /* Komunikat */
+    GtkWidget *label = gtk_label_new(message);
+    gtk_label_set_line_wrap(GTK_LABEL(label), TRUE);
+    gtk_box_pack_start(GTK_BOX(content), label, FALSE, FALSE, 5);
+    
+    /* Pole wprowadzania ID operatora */
+    GtkWidget *entry = gtk_entry_new();
+    gtk_entry_set_placeholder_text(GTK_ENTRY(entry), "ID Operatora");
+    if (cfg->operator_id[0] != '\0') {
+        gtk_entry_set_text(GTK_ENTRY(entry), cfg->operator_id);
+    }
+    gtk_box_pack_start(GTK_BOX(content), entry, FALSE, FALSE, 10);
+    
+    gtk_widget_show_all(dialog);
+    gint result = gtk_dialog_run(GTK_DIALOG(dialog));
+    
+    gboolean authorized = FALSE;
+    if (result == GTK_RESPONSE_OK) {
+        const char *op_id = gtk_entry_get_text(GTK_ENTRY(entry));
+        if (op_id && strlen(op_id) > 0) {
+            strncpy(cfg->operator_id, op_id, sizeof(cfg->operator_id) - 1);
+            cfg->is_authenticated = TRUE;
+            authorized = TRUE;
+            
+            /* Dodaj operator_id do payloadu w przyszłych komendach */
+            gtk_statusbar_push(GTK_STATUSBAR(gtk_widget_get_data(dialog, "statusbar")),
+                              0, g_strdup_printf("Zalogowano jako: %s", op_id));
+        }
+    }
+    
+    gtk_widget_destroy(dialog);
+    return authorized;
+}
+
+/* Dialog potwierdzenia dla operacji niebezpiecznych */
+static gboolean confirm_dangerous_operation(const char *command, GtkWidget *parent)
+{
+    GtkWidget *dialog = gtk_dialog_new_with_buttons(
+        "⚠️ POTWIERDZENIE OPERACJI NIEBEZPIECZNEJ",
+        GTK_WINDOW(parent),
+        GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT,
+        "_Anuluj", GTK_RESPONSE_CANCEL,
+        "_TAK, kontynuuj", GTK_RESPONSE_OK,
+        NULL);
+    
+    GtkWidget *content = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+    gtk_container_set_border_width(GTK_CONTAINER(content), 20);
+    
+    char message[512];
+    snprintf(message, sizeof(message),
+        "❗ UWAGA! ❗\n\n"
+        "Zamierzasz wykonać operację: %s\n\n"
+        "Ta operacja może spowodować:\n"
+        "• Utratę danych\n"
+        "• Trwałe zmiany konfiguracji\n"
+        "• Zatrzymanie systemu\n\n"
+        "Czy na pewno chcesz kontynuować?", command);
+    
+    GtkWidget *label = gtk_label_new(message);
+    gtk_label_set_line_wrap(GTK_LABEL(label), TRUE);
+    gtk_box_pack_start(GTK_BOX(content), label, FALSE, FALSE, 5);
+    
+    gtk_widget_show_all(dialog);
+    gint result = gtk_dialog_run(GTK_DIALOG(dialog));
+    gtk_widget_destroy(dialog);
+    
+    return (result == GTK_RESPONSE_OK);
 }
 
 static void on_btn_clicked(GtkWidget *btn, gpointer ud)
 {
     (void)btn;
     BtnData    *d       = ud;
+    
+    /* Sprawdź poziom ryzyka komendy */
+    CommandRiskLevel risk = get_command_risk_level(d->command);
+    
+    /* Dla operacji niebezpiecznych - dodatkowe potwierdzenie */
+    if (risk == CMD_DANGEROUS) {
+        if (!confirm_dangerous_operation(d->command, d->main_window)) {
+            return;  /* Użytkownik anulował */
+        }
+    }
+    
+    /* Sprawdź autoryzację dla komend wrażliwych i niebezpiecznych */
+    if (risk != CMD_NORMAL) {
+        if (!check_authorization(d->cfg, d->command, d->main_window)) {
+            gtk_statusbar_push(GTK_STATUSBAR(d->statusbar), d->status_ctx,
+                              "✗ Operacja anulowana - brak autoryzacji");
+            return;  /* Brak autoryzacji */
+        }
+    }
+    
     const char *payload = d->payload_entry
                           ? gtk_entry_get_text(GTK_ENTRY(d->payload_entry))
                           : "{}";
@@ -554,6 +789,19 @@ static void build_ui(Config *cfg)
     gtk_box_pack_start(GTK_BOX(sidebar),
         gtk_separator_new(GTK_ORIENTATION_HORIZONTAL), FALSE, FALSE, 6);
 
+    /* Sekcja: Diagnostyka */
+    gtk_box_pack_start(GTK_BOX(sidebar), section_label("Diagnostyka"), FALSE, FALSE, 0);
+    
+    GtkWidget *btn_diag_system = sidebar_btn("🔍  Diagnoza systemu", "action-btn",
+                                             "Uruchom diagnostykę systemową");
+    GtkWidget *btn_diag_config = sidebar_btn("⚙️  Sprawdź konfigurację", "action-btn",
+                                             "Sprawdź poprawność konfiguracji");
+    gtk_box_pack_start(GTK_BOX(sidebar), btn_diag_system, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(sidebar), btn_diag_config, FALSE, FALSE, 0);
+
+    gtk_box_pack_start(GTK_BOX(sidebar),
+        gtk_separator_new(GTK_ORIENTATION_HORIZONTAL), FALSE, FALSE, 6);
+
     /* Sekcja: Zdarzenie */
     gtk_box_pack_start(GTK_BOX(sidebar), section_label("Zdarzenie frontend"), FALSE, FALSE, 0);
     gtk_box_pack_start(GTK_BOX(sidebar), section_label("Payload JSON:"),      FALSE, FALSE, 0);
@@ -570,6 +818,19 @@ static void build_ui(Config *cfg)
     /* Elastyczny odstęp */
     gtk_box_pack_start(GTK_BOX(sidebar),
         gtk_box_new(GTK_ORIENTATION_VERTICAL, 0), TRUE, TRUE, 0);
+
+    gtk_box_pack_start(GTK_BOX(sidebar),
+        gtk_separator_new(GTK_ORIENTATION_HORIZONTAL), FALSE, FALSE, 6);
+
+    /* Sekcja: Konfiguracja */
+    gtk_box_pack_start(GTK_BOX(sidebar), section_label("Konfiguracja"), FALSE, FALSE, 0);
+    
+    GtkWidget *btn_config_view = sidebar_btn("📄  Pokaż config", "action-btn",
+                                             "Wyświetl aktualną konfigurację");
+    GtkWidget *btn_config_reload = sidebar_btn("🔄  Przeładuj config", "action-btn",
+                                               "Przeładuj plik konfiguracyjny");
+    gtk_box_pack_start(GTK_BOX(sidebar), btn_config_view, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(sidebar), btn_config_reload, FALSE, FALSE, 0);
 
     gtk_box_pack_start(GTK_BOX(sidebar),
         gtk_separator_new(GTK_ORIENTATION_HORIZONTAL), FALSE, FALSE, 6);
@@ -633,16 +894,32 @@ static void build_ui(Config *cfg)
     /* ══════════════════════════════════════════
      * Podłączenie sygnałów
      * ══════════════════════════════════════════ */
-    BtnData *dp = btn_data_new(cfg, "ping",           NULL,          tv, spinner, sbar, sctx);
-    BtnData *ds = btn_data_new(cfg, "status",         NULL,          tv, spinner, sbar, sctx);
-    BtnData *de = btn_data_new(cfg, "frontend.event", payload_entry, tv, spinner, sbar, sctx);
-    BtnData *dd = btn_data_new(cfg, "shutdown",       NULL,          tv, spinner, sbar, sctx);
+    BtnData *dp = btn_data_new(cfg, "ping",           NULL,          tv, spinner, sbar, sctx, win);
+    BtnData *ds = btn_data_new(cfg, "status",         NULL,          tv, spinner, sbar, sctx, win);
+    BtnData *de = btn_data_new(cfg, "frontend.event", payload_entry, tv, spinner, sbar, sctx, win);
+    BtnData *dd = btn_data_new(cfg, "shutdown",       NULL,          tv, spinner, sbar, sctx, win);
+    
+    /* Przyciski diagnostyki */
+    BtnData *dds = btn_data_new(cfg, "diagnostic.system", NULL, tv, spinner, sbar, sctx, win);
+    BtnData *ddc = btn_data_new(cfg, "diagnostic.config", NULL, tv, spinner, sbar, sctx, win);
+    
+    /* Przyciski konfiguracji */
+    BtnData *dcv = btn_data_new(cfg, "config.show",   NULL, tv, spinner, sbar, sctx, win);
+    BtnData *dcr = btn_data_new(cfg, "config.reload", NULL, tv, spinner, sbar, sctx, win);
 
-    g_signal_connect(btn_ping,     "clicked", G_CALLBACK(on_btn_clicked),   dp);
-    g_signal_connect(btn_status,   "clicked", G_CALLBACK(on_btn_clicked),   ds);
-    g_signal_connect(btn_event,    "clicked", G_CALLBACK(on_btn_clicked),   de);
-    g_signal_connect(btn_shutdown, "clicked", G_CALLBACK(on_btn_clicked),   dd);
-    g_signal_connect(btn_clear,    "clicked", G_CALLBACK(on_clear_clicked), tv);
+    g_signal_connect(btn_ping,        "clicked", G_CALLBACK(on_btn_clicked),   dp);
+    g_signal_connect(btn_status,      "clicked", G_CALLBACK(on_btn_clicked),   ds);
+    g_signal_connect(btn_event,       "clicked", G_CALLBACK(on_btn_clicked),   de);
+    g_signal_connect(btn_shutdown,    "clicked", G_CALLBACK(on_btn_clicked),   dd);
+    g_signal_connect(btn_clear,       "clicked", G_CALLBACK(on_clear_clicked), tv);
+    
+    /* Diagnostyka */
+    g_signal_connect(btn_diag_system, "clicked", G_CALLBACK(on_btn_clicked),   dds);
+    g_signal_connect(btn_diag_config, "clicked", G_CALLBACK(on_btn_clicked),   ddc);
+    
+    /* Konfiguracja */
+    g_signal_connect(btn_config_view,  "clicked", G_CALLBACK(on_btn_clicked), dcv);
+    g_signal_connect(btn_config_reload,"clicked", G_CALLBACK(on_btn_clicked), dcr);
 
     /* Enter w polu payload → uruchom btn_event */
     g_signal_connect_swapped(payload_entry, "activate",
