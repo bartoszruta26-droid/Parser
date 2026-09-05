@@ -710,7 +710,431 @@ Zalecenia:
 - testować aktualizacje na docelowej architekturze ARM,
 - dokumentować wymagane wersje systemu i bibliotek.
 
-## 19. Standardy jakości
+## 19. Obsługa sensorów i efektorów Arduino Nano oraz Raspberry Pi Pico
+
+Projekt obsługuje integrację sprzętową z mikrokontrolerami Arduino Nano oraz Raspberry Pi Pico/Pico W w dwóch wariantach komunikacji: **USB** oraz **Ethernet** (w tym Ethernet Hat). Obsługa obejmuje zarówno odczyt danych z sensorów, jak i sterowanie efektorami.
+
+### 19.1. Architektura obsługi sensorów i efektorów
+
+Komunikacja z mikrokontrolerami realizowana jest na trzech poziomach:
+
+```text
++------------------+     +-------------------+     +------------------------+
+|   Sensor/Effektor| --> | Mikrokontroler    | --> | Daemon (Linux/Raspberry)|
+|   (DHT, relay...) |     | Arduino Nano/Pico |     | swarm.bin/rpi-swarm.sh |
++------------------+     +-------------------+     +------------------------+
+         |                        |                          |
+         | USB / Ethernet         | JSON/tekst               | Socket UNIX / TCP
+         v                        v                          v
+   Dane fizyczne           Formatowane dane          Rejestracja w systemie
+```
+
+### 19.2. Arduino Nano — połączenie USB
+
+**Charakterystyka:**
+- Komunikacja szeregowa przez USB (UART)
+- Automatyczne wykrywanie portów `/dev/ttyUSB*` lub `/dev/ttyACM*`
+- Domyślna prędkość: 9600 baud
+- Zasilanie z portu USB (5V)
+
+**Przykładowy kod sensora (`sensors/arduino-nano-usb.ino`):**
+
+```cpp
+#include <DHT.h>
+
+#define DHTPIN 2
+#define DHTTYPE DHT11
+
+DHT dht(DHTPIN, DHTTYPE);
+
+void setup() {
+  Serial.begin(9600);
+  dht.begin();
+  delay(1000);
+  Serial.println("{\"status\":\"initialized\",\"sensor\":\"dht11\"}");
+}
+
+void loop() {
+  float temperature = dht.readTemperature();
+  float humidity = dht.readHumidity();
+  
+  if (isnan(temperature) || isnan(humidity)) {
+    Serial.println("{\"error\":\"read_failed\"}");
+    delay(2000);
+    return;
+  }
+  
+  Serial.printf("{\"temp\":%.1f,\"humidity\":%.1f,\"timestamp\":%lu}\n", 
+                temperature, humidity, millis());
+  delay(2000);
+}
+```
+
+**Konfiguracja w daemon.conf:**
+
+```bash
+# Dodaj sensor USB
+RPI_SENSOR_SOURCES="temperature=/dev/ttyUSB0,humidity=/dev/ttyUSB0"
+```
+
+**Rejestracja sensora:**
+
+```bash
+./bin/medical-cli.sh sensor add \
+  --id usb_arduino_01 \
+  --type usb \
+  --port /dev/ttyUSB0
+```
+
+**Odczyt danych:**
+
+```bash
+./bin/medical-cli.sh sensor read --id usb_arduino_01
+```
+
+### 19.3. Raspberry Pi Pico W — połączenie Ethernet/WiFi
+
+**Charakterystyka:**
+- Komunikacja sieciowa HTTP/TCP
+- Wbudowany moduł WiFi (Pico W) lub zewnętrzny Ethernet Hat
+- Serwer HTTP na porcie 80 lub socket TCP
+- Endpoint danych: `http://<ip>/data`
+
+**Przykładowy kod sensora (`sensors/pico-w-ethernet.ino`):**
+
+```cpp
+#include <WiFi.h>
+#include <HTTPServer.h>
+#include <ArduinoJson.h>
+#include <DHT.h>
+
+const char* ssid = "YOUR_WIFI_SSID";
+const char* password = "YOUR_WIFI_PASSWORD";
+
+#define DHTPIN 15
+#define DHTTYPE DHT11
+
+DHT dht(DHTPIN, DHTTYPE);
+WiFiServer server(80);
+
+float lastTemp = 0.0;
+float lastHumidity = 0.0;
+
+void setup() {
+  Serial.begin(115200);
+  dht.begin();
+  
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  
+  Serial.println("\nPołączono!");
+  Serial.print("Adres IP: ");
+  Serial.println(WiFi.localIP());
+  
+  server.begin();
+  readSensor();
+}
+
+void loop() {
+  if (millis() % 2000 < 10) {
+    readSensor();
+  }
+  handleHTTPClient();
+  delay(10);
+}
+
+void readSensor() {
+  float temperature = dht.readTemperature();
+  float humidity = dht.readHumidity();
+  
+  if (!isnan(temperature) && !isnan(humidity)) {
+    lastTemp = temperature;
+    lastHumidity = humidity;
+  }
+}
+
+void handleHTTPClient() {
+  WiFiClient client = server.available();
+  
+  if (client && client.find("/data")) {
+    StaticJsonDocument<256> doc;
+    doc["sensor"] = "dht11";
+    doc["temp"] = lastTemp;
+    doc["humidity"] = lastHumidity;
+    doc["timestamp"] = millis();
+    
+    String output;
+    serializeJson(doc, output);
+    
+    client.println("HTTP/1.1 200 OK");
+    client.println("Content-Type: application/json");
+    client.println("Connection: close");
+    client.println();
+    client.println(output);
+    client.stop();
+  }
+}
+```
+
+**Rejestracja sensora Ethernet:**
+
+```bash
+./bin/medical-cli.sh sensor add \
+  --id eth_pico_01 \
+  --type ethernet \
+  --port 192.168.1.100
+```
+
+**Odczyt danych:**
+
+```bash
+curl http://192.168.1.100/data
+# lub
+./bin/medical-cli.sh sensor read --id eth_pico_01
+```
+
+### 19.4. Raspberry Pi Pico z Ethernet Hat
+
+**Charakterystyka:**
+- Zewnętrzny moduł Ethernet (W5500, ENC28J60)
+- Komunikacja SPI między Pico a Hat
+- Konfiguracja statycznego IP lub DHCP
+- Niezależność od WiFi
+
+**Przykładowa konfiguracja Ethernet Hat (W5500):**
+
+```cpp
+#include <SPI.h>
+#include <Ethernet.h>
+
+byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
+IPAddress ip(192, 168, 1, 100);
+EthernetServer server(80);
+
+void setup() {
+  Ethernet.begin(mac, ip);
+  server.begin();
+  Serial.print("Server started at ");
+  Serial.println(Ethernet.localIP());
+}
+```
+
+**Zalety Ethernet Hat:**
+- Stabilniejsze połączenie niż WiFi
+- Niezależność od infrastruktury bezprzewodowej
+- Możliwość pracy w izolowanych sieciach przemysłowych
+- Niższe opóźnienia komunikacji
+
+### 19.5. Obsługa efektorów
+
+Projekt obsługuje sterowanie efektorami (przekaźniki, silniki, diody LED, grzałki) podłączonymi do Arduino Nano lub Raspberry Pi Pico.
+
+**Typy efektorów:**
+- **Przekaźniki (relay)** — załączanie/wyłączanie urządzeń 230V
+- **PWM** — regulacja jasności LED, prędkości wentylatorów
+- **Serwo** — precyzyjne pozycjonowanie
+- **Silniki DC** — napędy, pompy
+
+**Konfiguracja efektorów w `daemon.conf`:**
+
+```bash
+RPI_EFFECTOR_TARGETS="relay=/tmp/relay.state,fan=/opt/set-fan.sh,pwm_led=/sys/class/pwm/pwm0/duty_cycle"
+```
+
+**Sterowanie efektorem przez swarm:**
+
+```bash
+# Załącz przekaźnik
+/opt/parser-template/swarm/bin/rpi-swarm.sh effector-send relay on
+
+# Wyłącz wentylator
+/opt/parser-template/swarm/bin/rpi-swarm.sh effector-send fan off
+
+# Ustaw jasność LED (0-255)
+/opt/parser-template/swarm/bin/rpi-swarm.sh effector-send pwm_led 128
+```
+
+**Przykładowy kod efektora dla Arduino Nano:**
+
+```cpp
+const int RELAY_PIN = 7;
+const int PWM_LED_PIN = 9;
+
+void setup() {
+  pinMode(RELAY_PIN, OUTPUT);
+  pinMode(PWM_LED_PIN, OUTPUT);
+  Serial.begin(9600);
+  Serial.println("{\"status\":\"effector_ready\"}");
+}
+
+void loop() {
+  if (Serial.available()) {
+    String command = Serial.readStringUntil('\n');
+    
+    if (command.startsWith("{\"relay\":\"on\"}")) {
+      digitalWrite(RELAY_PIN, HIGH);
+      Serial.println("{\"relay\":\"on\",\"status\":\"ok\"}");
+    } else if (command.startsWith("{\"relay\":\"off\"}")) {
+      digitalWrite(RELAY_PIN, LOW);
+      Serial.println("{\"relay\":\"off\",\"status\":\"ok\"}");
+    } else if (command.startsWith("{\"pwm\":")) {
+      int value = extractValue(command);
+      analogWrite(PWM_LED_PIN, value);
+      Serial.printf("{\"pwm\":%d,\"status\":\"ok\"}\n", value);
+    }
+  }
+  delay(100);
+}
+
+int extractValue(String json) {
+  int start = json.indexOf(':') + 1;
+  int end = json.indexOf('}');
+  return json.substring(start, end).toInt();
+}
+```
+
+### 19.6. Integracja z daemonem przez rpi-swarm.sh
+
+Skrypt `swarm/bin/rpi-swarm.sh` zapewnia ujednolicony interfejs do obsługi sensorów i efektorów w trybie swarm (klastra Raspberry Pi).
+
+**Komendy dostępne:**
+
+```bash
+# Odczyt sensora z konfigurowalnego źródła
+rpi-swarm.sh sensor-read <nazwa_sensora> [wartość]
+
+# Wysyłanie komendy do efektora
+rpi-swarm.sh effector-send <nazwa_efektora> <stan>
+
+# Przekazywanie danych do głównego node'a
+rpi-swarm.sh forward-main swarm.sensor '{"node":"rpi-01","sensor":"temp","value":"21.5"}'
+
+# Odbieranie linii protokołu z sieci
+rpi-swarm.sh receive-line "<request_id>|<source>|<command>|<payload>"
+```
+
+**Przykłady użycia:**
+
+```bash
+# Odczyt temperatury z sensora 1-Wire
+DAEMON_CONFIG=/etc/daemon.conf \
+  rpi-swarm.sh sensor-read temperature
+
+# Odczyt z podaniem wartości (gdy adapter już odczytał hardware)
+rpi-swarm.sh sensor-read humidity 48.2
+
+# Sterowanie przekaźnikiem
+rpi-swarm.sh effector-send relay on
+
+# Przekazanie danych sensora do głównego daemona
+rpi-swarm.sh forward-main swarm.sensor \
+  '{"node":"rpi-worker-01","sensor":"co2","value":"450ppm"}'
+```
+
+### 19.7. Mapowanie sensorów i efektorów
+
+**Mapa sensorów (`RPI_SENSOR_SOURCES`):**
+
+```bash
+RPI_SENSOR_SOURCES="
+  temperature=/sys/bus/w1/devices/28-xxx/w1_slave,
+  humidity=/opt/scripts/read-humidity.sh,
+  co2=/dev/ttyUSB0,
+  pressure=/opt/bmp280/read.py,
+  arduino_usb=/dev/ttyACM0,
+  pico_ethernet=http://192.168.1.100/data
+"
+```
+
+**Mapa efektorów (`RPI_EFFECTOR_TARGETS`):**
+
+```bash
+RPI_EFFECTOR_TARGETS="
+  relay=/tmp/relay.state,
+  fan=/opt/scripts/set-fan-speed.sh,
+  heater_gpio=/sys/class/gpio/gpio17/value,
+  pwm_led=/sys/class/pwm/pwm0/duty_cycle,
+  arduino_relay=/dev/ttyUSB0,
+  pico_servo=http://192.168.1.100/effector
+"
+```
+
+### 19.8. Formaty danych
+
+**Sensor USB (Arduino Nano):**
+```json
+{"temp": 25.5, "humidity": 60.2, "timestamp": 1234567890}
+```
+
+**Sensor Ethernet (Pico W):**
+```json
+{
+  "sensor": "dht11",
+  "temp": 25.5,
+  "humidity": 60.2,
+  "unit_temp": "C",
+  "unit_humidity": "%",
+  "timestamp": 1234567890,
+  "ip": "192.168.1.100"
+}
+```
+
+**Komenda efektora:**
+```json
+{
+  "node": "rpi-worker-01",
+  "effector": "relay",
+  "state": "on",
+  "timestamp_utc": "2026-06-01T09:00:00Z"
+}
+```
+
+### 19.9. Bezpieczeństwo i niezawodność
+
+**Zalecenia dla sensorów USB:**
+- Uprawnienia grupy `dialout` dla użytkownika daemona
+- Filtracja niepoprawnych danych JSON
+- Timeout na odczyt szeregowy (max 5 sekund)
+- Automatyczne wznawianie po rozłączeniu USB
+
+**Zalecenia dla sensorów Ethernet:**
+- Izolacja sieciowa (VLAN dla sensorów)
+- Whitelist adresów IP znanych sensorów
+- Walidacja SSL/TLS dla połączeń HTTPS
+- Rate limiting zapytań HTTP
+
+**Zalecenia dla efektorów:**
+- Sprzętowe zabezpieczenia przed przypadkowym załączeniem
+- Potwierdzenie wykonania komendy (acknowledgment)
+- Timeout na odpowiedź efektora
+- Stan domyślny przy utracie łączności (fail-safe)
+
+### 19.10. Diagnostyka
+
+```bash
+# Lista dostępnych portów USB
+ls -la /dev/ttyUSB* /dev/ttyACM*
+
+# Test połączenia z sensorem Ethernet
+curl -v http://192.168.1.100/data
+
+# Monitorowanie danych z sensora USB
+screen /dev/ttyUSB0 9600
+
+# Logi daemona w czasie rzeczywistym
+tail -f /var/log/medical-daemon.log
+
+# Status swarm
+rpi-swarm.sh sensor-read status
+
+# Test efektora
+rpi-swarm.sh effector-send relay test
+```
+
+## 20. Standardy jakości
 
 Każdy projekt utworzony na bazie tego template powinien dążyć do wysokiej jakości technicznej. Oznacza to:
 
@@ -725,7 +1149,7 @@ Każdy projekt utworzony na bazie tego template powinien dążyć do wysokiej ja
 - brak ukrytych wymagań środowiskowych,
 - łatwość przenoszenia między urządzeniami.
 
-## 20. Minimalny zakres projektu startowego
+## 21. Minimalny zakres projektu startowego
 
 Minimalna wersja projektu tworzonego na podstawie tego szablonu powinna zawierać:
 
@@ -742,13 +1166,13 @@ Minimalna wersja projektu tworzonego na podstawie tego szablonu powinna zawiera�
 
 Dopiero na tej bazie należy dodawać kolejne frontendy, integracje sprzętowe i rozszerzenia.
 
-## 21. Zasada rozszerzalności
+## 22. Zasada rozszerzalności
 
 Szablon powinien umożliwiać rozszerzanie bez łamania istniejących komponentów. Nowa funkcja powinna być dodawana jako osobny moduł, nowa podaplikacja, nowy endpoint, nowy widok frontendowy albo nowy profil konfiguracji, jeżeli pozwala na to charakter zmiany.
 
 Nie należy traktować template jako jednorazowego zestawu plików. Powinien być utrzymywany jako standard organizacyjny, który można ulepszać wraz z kolejnymi projektami.
 
-## 22. Podsumowanie
+## 23. Podsumowanie
 
 Ten projekt jest profesjonalnym szablonem dla rozwiązań wieloaplikacyjnych działających w środowisku Linux i Raspberry Pi. Jego fundamentem jest daemon pracujący w tle, zestaw niezależnych frontendów, podaplikacje wykonywane jako załączniki oraz automatyzacja oparta głównie na Bashu. Projekt dopuszcza użycie C, C++ i C# tam, gdzie jest to technicznie uzasadnione, ale nie zakłada użycia Pythona.
 
@@ -767,7 +1191,7 @@ Najważniejsze zasady template to:
 
 Szablon powinien być bazą dla kolejnych projektów, w których istotne są stabilność, przejrzystość, możliwość utrzymania oraz jasne rozdzielenie odpowiedzialności między komponentami systemu.
 
-## 23. Dodany szkielet daemona referencyjnego
+## 24. Dodany szkielet daemona referencyjnego
 
 Repozytorium zawiera teraz minimalny, schematyczny szkielet aplikacji daemon pokazujący komunikację z aplikacjami frontendowymi i backendowymi bez dodatkowych zależności projektowych.
 
