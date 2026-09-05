@@ -1,0 +1,50 @@
+```
+# Android build outputs
+/build/
+/app/build/
+*.apk
+*.aar
+*.dex
+
+# Gradle
+.gradle/
+gradle-wrapper.properties
+
+# IDE
+.vscode/
+.idea/
+
+# Local configuration file (sdk path, etc)
+local.properties
+
+# Keystore properties
+keystore.properties
+
+# Log Files
+*.log
+
+# Built application files
+*.apk
+*.ap_
+*.aab
+
+# Files for the ART/Dalvik VM
+*.dex
+
+# Java class files
+*.class
+
+# Generated files
+gen/
+out/
+
+# Debug symbol directory
+symbols/
+
+# Mac / Linux
+.DS_Store
+*~
+
+# Windows
+Thumbs.db
+```
